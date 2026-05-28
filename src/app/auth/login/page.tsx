@@ -1,4 +1,3 @@
-// src/app/auth/login/page.tsx
 'use client';
 
 import { useState } from 'react';
@@ -19,8 +18,10 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
-      router.push('/dashboard');
+      const response = await login(email, password);
+      sessionStorage.setItem('otp_user_id', response.userId.toString());
+      sessionStorage.setItem('otp_email', email);
+      router.push('/auth/verify-otp');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Login gagal');
     } finally {

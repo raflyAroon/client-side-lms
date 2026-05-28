@@ -30,6 +30,8 @@ export default function RegisterPage() {
     }
   };
 
+  sessionStorage.setItem('otp_email', email);
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 p-4">
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 w-full max-w-md">

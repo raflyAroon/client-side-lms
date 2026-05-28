@@ -1,8 +1,7 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import api from '@/lib/axios';
-import { useRouter } from 'next/navigation';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import api, { fetchCsrfCookie } from '@/lib/axios';
 
 type User = {
   id: number;
@@ -14,12 +13,11 @@ type User = {
 type AuthContextType = {
   user: User | null;
   loading: boolean;
-  register: (name: string, email: string, password: string) => Promise<{ userId: number }>;
-  login: (email: string, password: string) => Promise<{ userId: number }>;
+  login: (email: string, password: string) => Promise<{ userId: number; message: string }>;
+  register: (name: string, email: string, password: string) => Promise<{ userId: number; message: string }>;
   verifyOtp: (userId: number, code: string) => Promise<void>;
   requestOtp: (email: string) => Promise<void>;
   logout: () => Promise<void>;
-  fetchMe: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,55 +28,55 @@ export const useAuth = () => {
   return context;
 };
 
-export const AuthProvider = ({ children }: { children: ReactNode }) => {
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
+
+  useEffect(() => {
+    const fetchMe = async () => {
+      try {
+        const res = await api.get('/me');
+        setUser(res.data);
+      } catch (err) {
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchMe();
+  }, []);
 
   const register = async (name: string, email: string, password: string) => {
+    await fetchCsrfCookie();
     const res = await api.post('/register', { name, email, password });
-    return { userId: res.data.user_id };
+    return { userId: res.data.user_id, message: res.data.message };
   };
 
   const login = async (email: string, password: string) => {
+    await fetchCsrfCookie();
     const res = await api.post('/login', { email, password });
-    return { userId: res.data.user_id };
+    return { userId: res.data.user_id, message: res.data.message };
   };
-
-  const verifyOtp = async (userId: number, code: string) => {
-    await api.post('/verify-otp', { user_id: userId, code });
-    // Setelah verifikasi, user sudah login (cookie terpasang)
-    await fetchMe();
-  };
-
-  const fetchMe = async () => {
-  try {
-    const response = await api.get('/me');
-    setUser(response.data);
-    return response.data;
-  } catch {
-    setUser(null);
-    return null;
-  }
-};
-
-useEffect(() => {
-    fetchMe();
-  }, []);
 
   const requestOtp = async (email: string) => {
     await api.post('/request-otp', { email });
   };
 
+  const verifyOtp = async (userId: number, code: string) => {
+    await fetchCsrfCookie();
+    await api.post('/verify-otp', { user_id: userId, code });
+    const meRes = await api.get('/me');
+    setUser(meRes.data);
+  };
+
   const logout = async () => {
     await api.post('/logout');
     setUser(null);
-    router.push('/');
   };
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, register, login, verifyOtp, requestOtp, logout, fetchMe }}
+      value={{ user, loading, login, register, verifyOtp, requestOtp, logout }}
     >
       {children}
     </AuthContext.Provider>

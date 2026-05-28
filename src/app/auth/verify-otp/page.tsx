@@ -1,50 +1,39 @@
-// src/app/auth/verify-otp/page.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import api from '@/lib/axios';
 import { useAuth } from '@/context/AuthContext';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function VerifyOtpPage() {
-  const [otp, setOtp] = useState('');
+  const [code, setCode] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState<number | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
+  const { verifyOtp, requestOtp } = useAuth();
   const router = useRouter();
-  const { login } = useAuth();
 
   useEffect(() => {
-    // Ambil user_id dari sessionStorage dan parse ke number
     const storedUserId = sessionStorage.getItem('otp_user_id');
-    if (storedUserId) {
-      setUserId(parseInt(storedUserId, 10));
+    const storedEmail = sessionStorage.getItem('otp_email');
+    if (!storedUserId || !storedEmail) {
+      router.push('/auth/login');
     } else {
-      // Jika tidak ada, redirect ke register
-      router.push('/auth/register');
+      setUserId(parseInt(storedUserId));
+      setEmail(storedEmail);
     }
   }, [router]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId) {
-      setError('Sesi tidak valid. Silakan daftar ulang.');
-      return;
-    }
+    if (!userId) return;
     setError('');
     setLoading(true);
     try {
-      const response = await api.post('/verify-otp', {
-        user_id: userId, // sekarang number
-        code: otp,
-      });
-      // Jika berhasil, login otomatis? API mengembalikan cookie dan user
-      // Kita perlu menyimpan user ke context
-      if (response.data.user) {
-        // Set user ke context (misal dengan fungsi loginFromUser)
-        // Atau kita panggil endpoint /me untuk mendapatkan user
-        await login(undefined, undefined, true); // sesuaikan dengan implementasi login di AuthContext
-      }
+      await verifyOtp(userId, code);
+      sessionStorage.removeItem('otp_user_id');
+      sessionStorage.removeItem('otp_email');
       router.push('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.message || 'Kode OTP salah atau kadaluwarsa');
@@ -53,26 +42,36 @@ export default function VerifyOtpPage() {
     }
   };
 
-  // Jika userId belum ada, tampilkan loading
-  if (userId === null) {
-    return <div className="text-center p-8">Memuat...</div>;
-  }
+  const handleResendOtp = async () => {
+    if (!email) return;
+    setError('');
+    try {
+      await requestOtp(email);
+      alert('Kode OTP baru telah dikirim ke email Anda');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Gagal mengirim ulang OTP');
+    }
+  };
+
+  if (!userId || !email) return null;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 p-4">
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 w-full max-w-md">
         <h1 className="text-2xl font-bold text-center mb-6">Verifikasi OTP</h1>
-        <p className="text-center text-sm text-gray-600 mb-4">Kode OTP telah dikirim ke email Anda</p>
+        <p className="text-center text-gray-600 dark:text-gray-300 mb-4">
+          Masukkan kode 6 digit yang dikirim ke email <strong>{email}</strong>.
+        </p>
         {error && <div className="bg-red-100 text-red-700 p-3 rounded mb-4">{error}</div>}
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleVerify}>
           <div className="mb-6">
-            <label className="block text-sm font-medium mb-1">Kode OTP (6 digit)</label>
+            <label className="block text-sm font-medium mb-1">Kode OTP</label>
             <input
               type="text"
-              value={otp}
-              onChange={(e) => setOtp(e.target.value)}
-              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
               className="w-full border rounded-lg px-3 py-2 text-center text-2xl tracking-widest"
+              maxLength={6}
               required
             />
           </div>
@@ -84,6 +83,17 @@ export default function VerifyOtpPage() {
             {loading ? 'Memverifikasi...' : 'Verifikasi'}
           </button>
         </form>
+        <div className="text-center mt-4">
+          <button
+            onClick={handleResendOtp}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Kirim ulang kode OTP
+          </button>
+        </div>
+        <p className="text-center text-sm mt-4">
+          <Link href="/auth/login" className="text-blue-600">Kembali ke Login</Link>
+        </p>
       </div>
     </div>
   );
