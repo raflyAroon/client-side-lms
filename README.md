@@ -34,3 +34,18 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+
+<div className="navbar-brand">
+            <div className="brand-logo-hackthon">
+              <Image src={Hackathon} alt="hackathon" width={140} height={32} style={{ objectFit: 'contain' }} />
+            </div>
+            <div className="brand-divider" />
+            <div className="brand-logo-mpr">
+            <Image src={MPR} alt="MPR RI" width={80} height={10} style={{ objectFit: 'contain' }} />
+            </div>
+            <div className="brand-divider" />
+            <div className="brand-logo-asn">
+              <Image src={ASN} alt="ASN" width={100} height={20} style={{ objectFit: 'contain' }} />
+            </div>
+          </div>

@@ -2,7 +2,7 @@ import axios from 'axios';
 import Cookies from 'js-cookie';
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api',
+  baseURL: '/api',
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
@@ -10,27 +10,44 @@ const api = axios.create({
   },
 });
 
-// Interceptor untuk menambahkan XSRF-TOKEN dari cookie ke header
+// Prioritas: cookie > localStorage
+const getAuthToken = (): string | null => {
+  const tokenFromCookie = Cookies.get('auth_token');
+  console.log('Token from cookie:', tokenFromCookie?.substring(0, 20));
+  return localStorage.getItem('auth_token');
+  
+};
+
 api.interceptors.request.use((config) => {
-  const token = Cookies.get('XSRF-TOKEN');
-  if (token) {
-    config.headers['X-XSRF-TOKEN'] = token;
+  const xsrfToken = Cookies.get('XSRF-TOKEN');
+  if (xsrfToken) {
+    config.headers['X-XSRF-TOKEN'] = xsrfToken;
   }
+  const token = getAuthToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  console.log(`[Axios] ${config.method?.toUpperCase()} ${config.url} - Auth: ${!!token}`);
   return config;
 });
 
-export const fetchCsrfCookie = async () => {
-  await api.get('/sanctum/csrf-cookie');
-};
-
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      console.error('Unauthorized, silakan login ulang');
+  async (error) => {
+    if (error.response?.status === 401 && !error.config._retry) {
+      error.config._retry = true;
+      Cookies.remove('auth_token', { path: '/' });
+      localStorage.removeItem('auth_token');
+      if (typeof window !== 'undefined') {
+        window.location.href = '/auth/login';
+      }
     }
     return Promise.reject(error);
   }
 );
+
+export const fetchCsrfCookie = async () => {
+  await api.get('/sanctum/csrf-cookie');
+};
 
 export default api;
