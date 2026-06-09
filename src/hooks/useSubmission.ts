@@ -1,6 +1,6 @@
 // hooks/useSubmission.ts
 import { useState, useCallback } from 'react';
-import { submissionService } from '@/Services/submissionService';
+import { submissionService } from '@/services/submissionService';
 import { Submission, CreateSubmissionPayload, UpdateSubmissionPayload, SubmissionFile } from '@/types/submission';
 
 export const useSubmission = (submissionId?: number) => {

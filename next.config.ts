@@ -11,6 +11,12 @@ const nextConfig: NextConfig = {
   },
   reactStrictMode: true,
   allowedDevOrigins: ['192.168.1.1:3000', 'localhost:3000'],
+  experimental:{
+    serverActions: {
+      bodySizeLimit: '1000mb',
+    },
+    proxyClientMaxBodySize: "1000mb",
+  },
 };
 
 export default nextConfig;

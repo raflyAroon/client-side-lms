@@ -1,52 +1,63 @@
-// components/TeamRegistrationWizard.tsx
+// components/TeamRegistrationWizardV2.tsx
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useTeam } from '@/hooks/useTeam';
-import { CreateTeamPayload } from '@/types/team';
+import { TeamRegistrationFormData, MemberFormData } from '@/types/teamRegistration';
+import { teamService } from '@/services/teamService';
 
-interface TeamRegistrationWizardProps {
+interface WizardProps {
   isOpen: boolean;
   onSuccess?: () => void;
 }
 
-export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegistrationWizardProps) {
-  const { createTeam, cancelRegistration, loading, error } = useTeam();
+export default function TeamRegistrationWizard({ isOpen, onSuccess }: WizardProps) {
+  const { fetchTeam } = useTeam();
   const [step, setStep] = useState(0);
   const [visible, setVisible] = useState(false);
   const [stepDir, setStepDir] = useState<'forward' | 'back'>('forward');
   const [stepAnimating, setStepAnimating] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
-  const [formData, setFormData] = useState<CreateTeamPayload>({
-    team_name: '',
-    institution: '',
-    members: [
-      { name: '', email: '', phone: '', position: 'ketua' },
-      { name: '', email: '', phone: '', position: 'anggota1' },
-      { name: '', email: '', phone: '', position: 'anggota2' },
-    ],
-  });
-  const [localError, setLocalError] = useState('');
-  const [submitSuccess, setSubmitSuccess] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  // Mount/unmount animation
+  const [formData, setFormData] = useState<TeamRegistrationFormData>({
+    team_name: '',
+    institution: '',
+    city: '',
+    members: [
+      { name: '', email: '', phone: '', nim: '', faculty: '', study_program: '', position: 'ketua' },
+      { name: '', email: '', phone: '', nim: '', faculty: '', study_program: '', position: 'anggota1' },
+      { name: '', email: '', phone: '', nim: '', faculty: '', study_program: '', position: 'anggota2' },
+    ],
+    hak_cipta: null,
+    komitmen: null,
+    rekomendasi: null,
+    video_link: '',
+    summary_brief: null,
+    ktm_ketua: null,
+    ktm_anggota1: null,
+    ktm_anggota2: null,
+    agree_privacy: false,
+    agree_truth: false,
+  });
+
+  // Animation mount/unmount
   useEffect(() => {
     if (isOpen) {
       setStep(0);
-      setLocalError('');
-      setSubmitSuccess(false);
-      setAnimOutFalse();
+      setError('');
+      setSuccess(false);
+      setStepAnimating(false);
       requestAnimationFrame(() => requestAnimationFrame(() => setVisible(true)));
     } else {
       setVisible(false);
     }
   }, [isOpen]);
 
-  const setAnimOutFalse = () => {
-    // unused, for clarity
-  };
-
+  // Escape key handler
   useEffect(() => {
     if (!isOpen) return;
     const handleKey = (e: KeyboardEvent) => {
@@ -58,39 +69,68 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
 
   const handleCancel = () => {
     setVisible(false);
-    setTimeout(() => cancelRegistration(), 350);
+    setTimeout(() => {
+      if (onSuccess) onSuccess(); // optional close
+    }, 350);
   };
 
-  const handleChange = (field: keyof CreateTeamPayload, value: any) => {
+  // Field updates
+  const updateField = (field: keyof TeamRegistrationFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
-  const handleMemberChange = (index: number, field: keyof typeof formData.members[0], value: string) => {
+  const updateMember = (idx: number, field: keyof MemberFormData, value: string) => {
     const updated = [...formData.members];
-    updated[index] = { ...updated[index], [field]: value };
+    updated[idx] = { ...updated[idx], [field]: value };
     setFormData(prev => ({ ...prev, members: updated }));
   };
 
-  const validateStep0 = () => {
-    if (!formData.team_name.trim()) {
-      setLocalError('Nama tim harus diisi');
-      return false;
+  const handleFileChange = (
+    field: keyof Pick<TeamRegistrationFormData, 'hak_cipta' | 'komitmen' | 'rekomendasi' | 'summary_brief' | 'ktm_ketua' | 'ktm_anggota1' | 'ktm_anggota2'>,
+    file: File | null
+  ) => {
+    setFormData(prev => ({ ...prev, [field]: file }));
+  };
+
+  // Validasi per step (mengikuti logika V2)
+  const validateStep = (): boolean => {
+    setError('');
+    if (step === 0) {
+      if (!formData.team_name.trim()) { setError('Nama tim harus diisi'); return false; }
+      if (!formData.city.trim()) { setError('Kota/Wilayah harus diisi'); return false; }
+      return true;
     }
-    for (let i = 0; i < formData.members.length; i++) {
-      const m = formData.members[i];
-      if (!m.name.trim()) {
-        setLocalError(`Nama ${m.position === 'ketua' ? 'Ketua Tim' : `Anggota ${i}`} harus diisi`);
-        return false;
+    if (step === 1) {
+      for (let i = 0; i < formData.members.length; i++) {
+        const m = formData.members[i];
+        if (!m.name.trim()) { setError(`Nama ${m.position === 'ketua' ? 'Ketua' : `Anggota ${i}`} harus diisi`); return false; }
+        if (!m.email.trim() || !m.email.includes('@')) { setError(`Email ${m.position === 'ketua' ? 'Ketua' : `Anggota ${i}`} tidak valid`); return false; }
+        if (!m.nim.trim()) { setError(`NIM ${m.position === 'ketua' ? 'Ketua' : `Anggota ${i}`} harus diisi`); return false; }
+        if (!m.faculty.trim()) { setError(`Fakultas ${m.position === 'ketua' ? 'Ketua' : `Anggota ${i}`} harus diisi`); return false; }
+        if (!m.study_program.trim()) { setError(`Program Studi ${m.position === 'ketua' ? 'Ketua' : `Anggota ${i}`} harus diisi`); return false; }
       }
-      if (!m.email.trim() || !m.email.includes('@')) {
-        setLocalError(`Email ${m.position === 'ketua' ? 'Ketua Tim' : `Anggota ${i}`} tidak valid`);
-        return false;
-      }
+      return true;
     }
-    setLocalError('');
+    if (step === 2) {
+      if (!formData.hak_cipta) { setError('Surat pernyataan hak cipta wajib diunggah'); return false; }
+      if (!formData.komitmen) { setError('Surat komitmen wajib diunggah'); return false; }
+      if (!formData.rekomendasi) { setError('Surat rekomendasi universitas wajib diunggah'); return false; }
+      if (!formData.video_link.trim()) { setError('Link video portofolio wajib diisi'); return false; }
+      if (!formData.summary_brief) { setError('Summary brief konsep proyek wajib diunggah'); return false; }
+      if (!formData.ktm_ketua) { setError('Foto KTM ketua wajib diunggah'); return false; }
+      if (!formData.ktm_anggota1) { setError('Foto KTM anggota 1 wajib diunggah'); return false; }
+      if (!formData.ktm_anggota2) { setError('Foto KTM anggota 2 wajib diunggah'); return false; }
+      return true;
+    }
+    if (step === 3) {
+      if (!formData.agree_privacy) { setError('Harap setujui kebijakan privasi'); return false; }
+      if (!formData.agree_truth) { setError('Harap setujui pernyataan kebenaran data'); return false; }
+      return true;
+    }
     return true;
   };
 
+  // Transisi antar step dengan animasi slide
   const transitionStep = (nextStep: number, dir: 'forward' | 'back') => {
     setStepDir(dir);
     setStepAnimating(true);
@@ -102,49 +142,84 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
   };
 
   const handleNext = () => {
-    if (step === 0 && validateStep0()) transitionStep(1, 'forward');
-  };
-
-  const handleBack = () => {
-    if (step === 1) transitionStep(0, 'back');
-  };
-
-  const handleSubmit = async () => {
-    try {
-      await createTeam(formData);
-      setSubmitSuccess(true);
-      setTimeout(() => {
-        if (onSuccess) onSuccess();
-      }, 1500);
-    } catch (err: any) {
-      setLocalError(err.response?.data?.message || err.message);
+    if (validateStep()) {
+      if (step === 3) {
+        handleSubmit();
+      } else {
+        transitionStep(step + 1, 'forward');
+      }
     }
   };
 
-  const memberLabel = (idx: number, pos: string) =>
-    pos === 'ketua' ? 'Ketua Tim' : `Anggota ${idx}`;
+  const handleBack = () => {
+    if (step > 0) transitionStep(step - 1, 'back');
+  };
 
-  if (!isOpen) return null;
+  // Submit ke backend
+  const handleSubmit = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const submitData = new FormData();
+      // Step 0
+      submitData.append('team_name', formData.team_name);
+      submitData.append('institution', formData.institution || '');
+      submitData.append('city', formData.city);
+      // Step 1
+      formData.members.forEach((member, idx) => {
+        submitData.append(`members[${idx}][name]`, member.name);
+        submitData.append(`members[${idx}][email]`, member.email);
+        if (member.phone) submitData.append(`members[${idx}][phone]`, member.phone);
+        submitData.append(`members[${idx}][nim]`, member.nim);
+        submitData.append(`members[${idx}][faculty]`, member.faculty);
+        submitData.append(`members[${idx}][study_program]`, member.study_program);
+        submitData.append(`members[${idx}][position]`, member.position);
+      });
+      // Step 2 files
+      if (formData.hak_cipta) submitData.append('hak_cipta', formData.hak_cipta);
+      if (formData.komitmen) submitData.append('komitmen', formData.komitmen);
+      if (formData.rekomendasi) submitData.append('rekomendasi', formData.rekomendasi);
+      submitData.append('video_link', formData.video_link);
+      if (formData.summary_brief) submitData.append('summary_brief', formData.summary_brief);
+      if (formData.ktm_ketua) submitData.append('ktm_ketua', formData.ktm_ketua);
+      if (formData.ktm_anggota1) submitData.append('ktm_anggota1', formData.ktm_anggota1);
+      if (formData.ktm_anggota2) submitData.append('ktm_anggota2', formData.ktm_anggota2);
+      // Step 3 checkboxes
+      submitData.append('agree_privacy', '1');
+      submitData.append('agree_truth', '1');
+
+      await teamService.completeRegistration(submitData);
+      setSuccess(true);
+      await fetchTeam(); // refresh data tim di context
+      setTimeout(() => {
+        if (onSuccess) onSuccess();
+      }, 2000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || err.message || 'Gagal mendaftarkan tim');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!isOpen && !visible) return null;
+
+  // Hitung progress bar berdasarkan step (0,1,2,3)
+  const progressPercent = step === 0 ? 25 : step === 1 ? 50 : step === 2 ? 75 : 100;
 
   return (
     <div
       className={`wz-overlay ${visible ? 'wz-overlay--in' : ''}`}
-      onClick={(e) => { if (e.target === e.currentTarget) handleCancel(); }}
+      onClick={(e) => { if (e.target === e.currentTarget && !loading) handleCancel(); }}
     >
-      <div
-        className={`wz-modal ${visible ? 'wz-modal--in' : ''}`}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Pendaftaran Tim"
-      >
-        {/* HEADER */}
+      <div className={`wz-modal ${visible ? 'wz-modal--in' : ''}`} role="dialog" aria-modal="true" aria-label="Pendaftaran Tim">
+        {/* HEADER dengan progress bar & step pills */}
         <div className="wz-header">
           <div className="wz-header-top">
             <div className="wz-brand">
               <div className="wz-brand-dot" />
-              <span className="wz-title">Pendaftaran Tim</span>
+              <span className="wz-title">Pendaftaran Tim Hackathon</span>
             </div>
-            <button className="wz-close" onClick={handleCancel} title="Tutup">
+            <button className="wz-close" onClick={handleCancel} disabled={loading} title="Tutup">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
               </svg>
@@ -152,11 +227,11 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           </div>
 
           <div className="wz-progress-track">
-            <div className="wz-progress-fill" style={{ width: step === 0 ? '50%' : '100%' }} />
+            <div className="wz-progress-fill" style={{ width: `${progressPercent}%` }} />
           </div>
 
           <div className="wz-steps">
-            {['Data Tim', 'Konfirmasi'].map((label, i) => (
+            {['Data Tim', 'Data Anggota', 'Dokumen', 'Konfirmasi'].map((label, i) => (
               <div key={i} className={`wz-step-pill ${step === i ? 'active' : step > i ? 'done' : ''}`}>
                 <span className="wz-step-num">
                   {step > i ? (
@@ -171,31 +246,32 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           </div>
         </div>
 
-        {/* BODY (SCROLLABLE) */}
+        {/* BODY - Scrollable area dengan step transisi */}
         <div className="wz-body" ref={bodyRef}>
-          {(localError || error) && !submitSuccess && (
+          {(error || (loading && !success)) && !success && (
             <div className="wz-error">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
-              {localError || error}
+              {error}
             </div>
           )}
 
-          {submitSuccess && (
+          {success && (
             <div className="wz-success">
               <div className="wz-success-icon">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
               </div>
-              <h3 className="wz-success-title">Tim Berhasil Didaftarkan!</h3>
-              <p className="wz-success-sub">Mengalihkan ke dashboard Anda…</p>
+              <h3 className="wz-success-title">Pendaftaran Berhasil!</h3>
+              <p className="wz-success-sub">Tim Anda sedang diverifikasi oleh admin. Mengalihkan...</p>
             </div>
           )}
 
-          {!submitSuccess && (
+          {!success && (
             <div className="wz-step-wrapper">
+              {/* STEP 0 - Data Tim */}
               <div
                 className={`wz-step-content ${
                   stepAnimating
@@ -219,95 +295,53 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
                           type="text"
                           className="wz-input"
                           value={formData.team_name}
-                          onChange={(e) => handleChange('team_name', e.target.value)}
+                          onChange={(e) => updateField('team_name', e.target.value)}
                           onFocus={() => setFocusedField('team_name')}
                           onBlur={() => setFocusedField(null)}
                           placeholder="Contoh: Tim Inovasi Digital"
-                          autoComplete="off"
                         />
                         <div className="wz-input-glow" />
                       </div>
                     </div>
+
                     <div className="wz-field">
-                      <label className="wz-label">
-                        Institusi / Asal Sekolah
-                        <span className="wz-opt"> (opsional)</span>
-                      </label>
+                      <label className="wz-label">Institusi / Universitas</label>
                       <div className={`wz-input-wrap ${focusedField === 'institution' ? 'focused' : ''}`}>
                         <input
                           type="text"
                           className="wz-input"
                           value={formData.institution || ''}
-                          onChange={(e) => handleChange('institution', e.target.value)}
+                          onChange={(e) => updateField('institution', e.target.value)}
                           onFocus={() => setFocusedField('institution')}
                           onBlur={() => setFocusedField(null)}
-                          placeholder="Nama sekolah / universitas"
+                          placeholder="Nama universitas / sekolah"
                         />
                         <div className="wz-input-glow" />
                       </div>
                     </div>
 
-                    <div className="wz-divider-row">
-                      <span className="wz-divider-label">Anggota Tim</span>
-                      <div className="wz-divider-line" />
-                      <span className="wz-divider-badge">3 Orang</span>
-                    </div>
-
-                    {formData.members.map((member, idx) => (
-                      <div key={idx} className="wz-member-block">
-                        <div className="wz-member-header">
-                          <span className="wz-member-icon">
-                            {member.position === 'ketua' ? '👑' : '👤'}
-                          </span>
-                          <span className="wz-member-title">{memberLabel(idx, member.position)}</span>
-                          {member.position === 'ketua' && <span className="wz-member-badge">Wajib</span>}
-                        </div>
-                        <div className="wz-member-fields">
-                          <div className={`wz-input-wrap ${focusedField === `name-${idx}` ? 'focused' : ''}`}>
-                            <input
-                              type="text"
-                              className="wz-input"
-                              placeholder="Nama lengkap"
-                              value={member.name}
-                              onChange={(e) => handleMemberChange(idx, 'name', e.target.value)}
-                              onFocus={() => setFocusedField(`name-${idx}`)}
-                              onBlur={() => setFocusedField(null)}
-                            />
-                            <div className="wz-input-glow" />
-                          </div>
-                          <div className="wz-field-row">
-                            <div className={`wz-input-wrap ${focusedField === `email-${idx}` ? 'focused' : ''}`}>
-                              <input
-                                type="email"
-                                className="wz-input"
-                                placeholder="Email"
-                                value={member.email}
-                                onChange={(e) => handleMemberChange(idx, 'email', e.target.value)}
-                                onFocus={() => setFocusedField(`email-${idx}`)}
-                                onBlur={() => setFocusedField(null)}
-                              />
-                              <div className="wz-input-glow" />
-                            </div>
-                            <div className={`wz-input-wrap ${focusedField === `phone-${idx}` ? 'focused' : ''}`}>
-                              <input
-                                type="tel"
-                                className="wz-input"
-                                placeholder="WhatsApp (opsional)"
-                                value={member.phone || ''}
-                                onChange={(e) => handleMemberChange(idx, 'phone', e.target.value)}
-                                onFocus={() => setFocusedField(`phone-${idx}`)}
-                                onBlur={() => setFocusedField(null)}
-                              />
-                              <div className="wz-input-glow" />
-                            </div>
-                          </div>
-                        </div>
+                    <div className="wz-field">
+                      <label className="wz-label">
+                        Kota / Wilayah <span className="wz-req">*</span>
+                      </label>
+                      <div className={`wz-input-wrap ${focusedField === 'city' ? 'focused' : ''}`}>
+                        <input
+                          type="text"
+                          className="wz-input"
+                          value={formData.city}
+                          onChange={(e) => updateField('city', e.target.value)}
+                          onFocus={() => setFocusedField('city')}
+                          onBlur={() => setFocusedField(null)}
+                          placeholder="Contoh: Jakarta Selatan"
+                        />
+                        <div className="wz-input-glow" />
                       </div>
-                    ))}
+                    </div>
                   </div>
                 )}
               </div>
 
+              {/* STEP 1 - Data Anggota (dengan NIM, Fakultas, Prodi) */}
               <div
                 className={`wz-step-content ${
                   stepAnimating
@@ -320,8 +354,224 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
                 }`}
               >
                 {step === 1 && (
+                  <div className="wz-form">
+                    {formData.members.map((member, idx) => (
+                      <div key={idx} className="wz-member-block">
+                        <div className="wz-member-header">
+                          <span className="wz-member-icon">
+                            {member.position === 'ketua' ? '👑' : '👤'}
+                          </span>
+                          <span className="wz-member-title">
+                            {member.position === 'ketua' ? 'Ketua Tim' : `Anggota ${idx}`}
+                          </span>
+                          {member.position === 'ketua' && <span className="wz-member-badge">Wajib</span>}
+                        </div>
+                        <div className="wz-member-fields">
+                          <div className={`wz-input-wrap ${focusedField === `name-${idx}` ? 'focused' : ''}`}>
+                            <input
+                              type="text"
+                              className="wz-input"
+                              placeholder="Nama lengkap *"
+                              value={member.name}
+                              onChange={(e) => updateMember(idx, 'name', e.target.value)}
+                              onFocus={() => setFocusedField(`name-${idx}`)}
+                              onBlur={() => setFocusedField(null)}
+                            />
+                            <div className="wz-input-glow" />
+                          </div>
+                          <div className="wz-field-row">
+                            <div className={`wz-input-wrap ${focusedField === `email-${idx}` ? 'focused' : ''}`}>
+                              <input
+                                type="email"
+                                className="wz-input"
+                                placeholder="Email *"
+                                value={member.email}
+                                onChange={(e) => updateMember(idx, 'email', e.target.value)}
+                                onFocus={() => setFocusedField(`email-${idx}`)}
+                                onBlur={() => setFocusedField(null)}
+                              />
+                              <div className="wz-input-glow" />
+                            </div>
+                            <div className={`wz-input-wrap ${focusedField === `phone-${idx}` ? 'focused' : ''}`}>
+                              <input
+                                type="tel"
+                                className="wz-input"
+                                placeholder="WhatsApp (opsional)"
+                                value={member.phone || ''}
+                                onChange={(e) => updateMember(idx, 'phone', e.target.value)}
+                                onFocus={() => setFocusedField(`phone-${idx}`)}
+                                onBlur={() => setFocusedField(null)}
+                              />
+                              <div className="wz-input-glow" />
+                            </div>
+                          </div>
+                          <div className="wz-field-row">
+                            <div className={`wz-input-wrap ${focusedField === `nim-${idx}` ? 'focused' : ''}`}>
+                              <input
+                                type="text"
+                                className="wz-input"
+                                placeholder="NIM *"
+                                value={member.nim}
+                                onChange={(e) => updateMember(idx, 'nim', e.target.value)}
+                                onFocus={() => setFocusedField(`nim-${idx}`)}
+                                onBlur={() => setFocusedField(null)}
+                              />
+                              <div className="wz-input-glow" />
+                            </div>
+                            <div className={`wz-input-wrap ${focusedField === `faculty-${idx}` ? 'focused' : ''}`}>
+                              <input
+                                type="text"
+                                className="wz-input"
+                                placeholder="Fakultas *"
+                                value={member.faculty}
+                                onChange={(e) => updateMember(idx, 'faculty', e.target.value)}
+                                onFocus={() => setFocusedField(`faculty-${idx}`)}
+                                onBlur={() => setFocusedField(null)}
+                              />
+                              <div className="wz-input-glow" />
+                            </div>
+                          </div>
+                          <div className={`wz-input-wrap ${focusedField === `prodi-${idx}` ? 'focused' : ''}`}>
+                            <input
+                              type="text"
+                              className="wz-input"
+                              placeholder="Program Studi *"
+                              value={member.study_program}
+                              onChange={(e) => updateMember(idx, 'study_program', e.target.value)}
+                              onFocus={() => setFocusedField(`prodi-${idx}`)}
+                              onBlur={() => setFocusedField(null)}
+                            />
+                            <div className="wz-input-glow" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* STEP 2 - Upload Dokumen & Video */}
+              <div
+                className={`wz-step-content ${
+                  stepAnimating
+                    ? stepDir === 'back'
+                      ? 'wz-step--exit-right'
+                      : 'wz-step--exit-left'
+                    : step === 2
+                    ? 'wz-step--enter'
+                    : 'wz-step--hidden'
+                }`}
+              >
+                {step === 2 && (
+                  <div className="wz-form">
+                    <div className="wz-section-label">Upload Dokumen Wajib</div>
+
+                    {[
+                      { field: 'hak_cipta', label: 'Surat Pernyataan Hak Cipta', accept: '.pdf,.doc,.docx' },
+                      { field: 'komitmen', label: 'Surat Komitmen Keikutsertaan', accept: '.pdf,.doc,.docx' },
+                      { field: 'rekomendasi', label: 'Surat Rekomendasi Universitas', accept: '.pdf,.doc,.docx' },
+                    ].map((doc) => (
+                      <div key={doc.field} className="wz-field doc-group">
+                        <label className="wz-label">{doc.label} <span className="wz-req">*</span></label>
+                        <div className={`wz-input-wrap ${focusedField === doc.field ? 'focused' : ''}`}>
+                          <input
+                            type="file"
+                            accept={doc.accept}
+                            onChange={(e) => handleFileChange(doc.field as any, e.target.files?.[0] || null)}
+                            onFocus={() => setFocusedField(doc.field)}
+                            onBlur={() => setFocusedField(null)}
+                            className="wz-file-input"
+                          />
+                          <div className="wz-input-glow" />
+                        </div>
+                        {formData[doc.field as keyof typeof formData] && (
+                          <span className="file-name">
+                            📎 {(formData[doc.field as keyof typeof formData] as File).name}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+
+                    <div className="wz-field">
+                      <label className="wz-label">Link Video Portofolio / Rencana Proyek <span className="wz-req">*</span></label>
+                      <div className={`wz-input-wrap ${focusedField === 'video_link' ? 'focused' : ''}`}>
+                        <input
+                          type="url"
+                          className="wz-input"
+                          value={formData.video_link}
+                          onChange={(e) => updateField('video_link', e.target.value)}
+                          onFocus={() => setFocusedField('video_link')}
+                          onBlur={() => setFocusedField(null)}
+                          placeholder="https://youtu.be/..."
+                        />
+                        <div className="wz-input-glow" />
+                      </div>
+                    </div>
+
+                    <div className="wz-field">
+                      <label className="wz-label">Summary Brief Konsep Proyek (PDF) <span className="wz-req">*</span></label>
+                      <div className={`wz-input-wrap ${focusedField === 'summary_brief' ? 'focused' : ''}`}>
+                        <input
+                          type="file"
+                          accept=".pdf,.doc,.docx"
+                          onChange={(e) => handleFileChange('summary_brief', e.target.files?.[0] || null)}
+                          onFocus={() => setFocusedField('summary_brief')}
+                          onBlur={() => setFocusedField(null)}
+                          className="wz-file-input"
+                        />
+                        <div className="wz-input-glow" />
+                      </div>
+                      {formData.summary_brief && <span className="file-name">📎 {formData.summary_brief.name}</span>}
+                    </div>
+
+                    <div className="wz-divider-row">
+                      <span className="wz-divider-label">Foto KTM</span>
+                      <div className="wz-divider-line" />
+                      <span className="wz-divider-badge">3 file</span>
+                    </div>
+
+                    {[
+                      { field: 'ktm_ketua', label: 'KTM Ketua' },
+                      { field: 'ktm_anggota1', label: 'KTM Anggota 1' },
+                      { field: 'ktm_anggota2', label: 'KTM Anggota 2' },
+                    ].map((ktm) => (
+                      <div key={ktm.field} className="wz-field">
+                        <label className="wz-label">{ktm.label} <span className="wz-req">*</span></label>
+                        <div className={`wz-input-wrap ${focusedField === ktm.field ? 'focused' : ''}`}>
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png"
+                            onChange={(e) => handleFileChange(ktm.field as any, e.target.files?.[0] || null)}
+                            onFocus={() => setFocusedField(ktm.field)}
+                            onBlur={() => setFocusedField(null)}
+                            className="wz-file-input"
+                          />
+                          <div className="wz-input-glow" />
+                        </div>
+                        {formData[ktm.field as keyof typeof formData] && (
+                          <span className="file-name">🖼️ {(formData[ktm.field as keyof typeof formData] as File).name}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* STEP 3 - Konfirmasi & Persetujuan */}
+              <div
+                className={`wz-step-content ${
+                  stepAnimating
+                    ? stepDir === 'back'
+                      ? 'wz-step--exit-right'
+                      : 'wz-step--exit-left'
+                    : step === 3
+                    ? 'wz-step--enter'
+                    : 'wz-step--hidden'
+                }`}
+              >
+                {step === 3 && (
                   <div className="wz-confirm">
-                    <p className="wz-confirm-intro">Periksa kembali data tim sebelum mendaftar.</p>
+                    <p className="wz-confirm-intro">Periksa kembali data tim sebelum mengirim pendaftaran.</p>
                     <div className="wz-confirm-card">
                       <div className="wz-confirm-row">
                         <span className="wz-confirm-key">Nama Tim</span>
@@ -330,6 +580,10 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
                       <div className="wz-confirm-row">
                         <span className="wz-confirm-key">Institusi</span>
                         <span className="wz-confirm-val">{formData.institution || '—'}</span>
+                      </div>
+                      <div className="wz-confirm-row">
+                        <span className="wz-confirm-key">Kota</span>
+                        <span className="wz-confirm-val">{formData.city}</span>
                       </div>
                     </div>
 
@@ -340,7 +594,7 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
                             <span className="wz-mcr-icon">{m.position === 'ketua' ? '👑' : '👤'}</span>
                             <div>
                               <div className="wz-mcr-name">{m.name}</div>
-                              <div className="wz-mcr-email">{m.email}</div>
+                              <div className="wz-mcr-email">{m.email} | NIM: {m.nim}</div>
                             </div>
                           </div>
                           <span className={`wz-mcr-badge ${m.position === 'ketua' ? 'ketua' : ''}`}>
@@ -350,12 +604,46 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
                       ))}
                     </div>
 
+                    <div className="wz-confirm-card">
+                      <div className="wz-confirm-row">
+                        <span className="wz-confirm-key">Link Video</span>
+                        <span className="wz-confirm-val">{formData.video_link}</span>
+                      </div>
+                      <div className="wz-confirm-row">
+                        <span className="wz-confirm-key">Dokumen</span>
+                        <span className="wz-confirm-val">
+                          Hak Cipta ✓, Komitmen ✓, Rekomendasi ✓, Summary Brief ✓, 3 KTM ✓
+                        </span>
+                      </div>
+                    </div>
+
                     <div className="wz-warning">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                         <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
                         <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
                       </svg>
-                      Data masih dapat diubah setelah submit melalui halaman profil tim.
+                      Data yang diisi akan diverifikasi oleh admin. Pastikan semua berkas sesuai.
+                    </div>
+
+                    <div className="wz-checkbox-group">
+                      <label className="wz-checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={formData.agree_privacy}
+                          onChange={(e) => updateField('agree_privacy', e.target.checked)}
+                        />
+                        <span>Saya menyetujui kebijakan privasi dan pengelolaan data peserta.</span>
+                      </label>
+                    </div>
+                    <div className="wz-checkbox-group">
+                      <label className="wz-checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={formData.agree_truth}
+                          onChange={(e) => updateField('agree_truth', e.target.checked)}
+                        />
+                        <span>Saya menyatakan bahwa seluruh data yang diinput adalah benar dan dapat dipertanggungjawabkan.</span>
+                      </label>
                     </div>
                   </div>
                 )}
@@ -364,49 +652,36 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           )}
         </div>
 
-        {/* FOOTER */}
-        {!submitSuccess && (
+        {/* FOOTER dengan tombol navigasi */}
+        {!success && (
           <div className="wz-footer">
             <button className="wz-btn-ghost" onClick={handleCancel} disabled={loading}>
               Batal
             </button>
             <div className="wz-footer-right">
-              {step === 1 && (
+              {step > 0 && (
                 <button className="wz-btn-secondary" onClick={handleBack} disabled={loading}>
                   ← Kembali
                 </button>
               )}
-              {step === 0 && (
-                <button className="wz-btn-primary" onClick={handleNext} disabled={loading}>
-                  <span>Lanjutkan</span>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                    <polyline points="12 5 19 12 12 19" />
-                  </svg>
-                </button>
-              )}
-              {step === 1 && (
-                <button className="wz-btn-primary" onClick={handleSubmit} disabled={loading}>
-                  {loading ? (
-                    <span className="wz-spinner-wrap">
-                      <span className="wz-spinner" />
-                      Mendaftarkan…
-                    </span>
-                  ) : (
-                    <>
-                      <span>Daftarkan Tim</span>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    </>
-                  )}
-                </button>
-              )}
+              <button className="wz-btn-primary" onClick={handleNext} disabled={loading}>
+                {loading ? (
+                  <span className="wz-spinner-wrap">
+                    <span className="wz-spinner" />
+                    Memproses…
+                  </span>
+                ) : step === 3 ? (
+                  <>Daftarkan Tim <span className="btn-arrow">→</span></>
+                ) : (
+                  <>Lanjutkan <span className="btn-arrow">→</span></>
+                )}
+              </button>
             </div>
           </div>
         )}
       </div>
 
+      {/* GLOBAL STYLES (diambil dari V1, disesuaikan) */}
       <style jsx>{`
         /* OVERLAY */
         .wz-overlay {
@@ -414,7 +689,6 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           inset: 0;
           background: rgba(8, 20, 50, 0.55);
           backdrop-filter: blur(6px);
-          -webkit-backdrop-filter: blur(6px);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -427,27 +701,27 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           opacity: 1;
         }
 
-        /* MODAL - FLEX COLUMN, TIDAK SCROLL, BODY YANG SCROLL */
+        /* MODAL */
         .wz-modal {
           background: #ffffff;
           border-radius: 32px;
           width: 100%;
-          max-width: 620px;
+          max-width: 720px;
           max-height: 88vh;
           display: flex;
           flex-direction: column;
-          overflow: hidden; /* penting: modal tidak scroll, body yg scroll */
-          box-shadow: 0 0 0 1px rgba(0, 119, 255, 0.08), 0 32px 64px rgba(0, 30, 90, 0.22), 0 8px 20px rgba(0, 0, 0, 0.06);
+          overflow: hidden;
+          box-shadow: 0 0 0 1px rgba(0, 119, 255, 0.08), 0 32px 64px rgba(0, 30, 90, 0.22);
           transform: scale(0.94) translateY(12px);
           opacity: 0;
-          transition: transform 0.38s cubic-bezier(0.34, 1.52, 0.64, 1), opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+          transition: transform 0.38s cubic-bezier(0.34, 1.52, 0.64, 1), opacity 0.3s;
         }
         .wz-modal--in {
           transform: scale(1) translateY(0);
           opacity: 1;
         }
 
-        /* HEADER (fixed) */
+        /* HEADER */
         .wz-header {
           padding: 1.5rem 1.5rem 0;
           border-bottom: 1px solid rgba(0, 119, 255, 0.08);
@@ -482,7 +756,6 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           font-size: 1.2rem;
           font-weight: 700;
           color: #0a1628;
-          letter-spacing: -0.01em;
         }
         .wz-close {
           width: 32px;
@@ -496,13 +769,16 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           cursor: pointer;
           color: #4a6fa5;
           transition: all 0.2s;
-          flex-shrink: 0;
         }
-        .wz-close:hover {
+        .wz-close:hover:not(:disabled) {
           background: #fee2e2;
           border-color: #fca5a5;
           color: #dc2626;
           transform: rotate(90deg);
+        }
+        .wz-close:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
 
         .wz-progress-track {
@@ -529,6 +805,7 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           display: flex;
           gap: 0.5rem;
           padding-bottom: 1.1rem;
+          flex-wrap: wrap;
         }
         .wz-step-pill {
           display: flex;
@@ -538,7 +815,7 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           border-radius: 99px;
           border: 1.5px solid rgba(0, 0, 0, 0.08);
           background: transparent;
-          transition: all 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+          transition: all 0.3s;
         }
         .wz-step-pill.active {
           border-color: rgba(0, 119, 255, 0.3);
@@ -559,8 +836,6 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           font-weight: 800;
           background: rgba(0, 0, 0, 0.06);
           color: #4a6fa5;
-          transition: all 0.3s;
-          flex-shrink: 0;
         }
         .wz-step-pill.active .wz-step-num {
           background: linear-gradient(135deg, #0077ff, #00d4ff);
@@ -570,13 +845,11 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
         .wz-step-pill.done .wz-step-num {
           background: linear-gradient(135deg, #00c896, #00d4ff);
           color: white;
-          box-shadow: 0 2px 8px rgba(0, 200, 150, 0.3);
         }
         .wz-step-label {
           font-size: 0.75rem;
           font-weight: 600;
           color: #8ca8cc;
-          transition: color 0.3s;
         }
         .wz-step-pill.active .wz-step-label {
           color: #0077ff;
@@ -585,7 +858,7 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           color: #00a876;
         }
 
-        /* BODY - SCROLLABLE AREA */
+        /* BODY */
         .wz-body {
           flex: 1;
           overflow-y: auto;
@@ -603,11 +876,8 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           background: rgba(0, 119, 255, 0.25);
           border-radius: 10px;
         }
-        .wz-body::-webkit-scrollbar-thumb:hover {
-          background: rgba(0, 119, 255, 0.45);
-        }
 
-        /* STEP WRAPPER & TRANSITIONS */
+        /* STEP TRANSITIONS */
         .wz-step-wrapper {
           position: relative;
         }
@@ -632,69 +902,11 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           pointer-events: none;
         }
 
-        /* FORM & ERROR */
-        .wz-error {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          background: #fff1f2;
-          border: 1px solid #fecdd3;
-          color: #be123c;
-          padding: 0.65rem 0.85rem;
-          border-radius: 14px;
-          font-size: 0.8rem;
-          font-weight: 500;
-          margin-bottom: 1.2rem;
-          animation: wz-shake 0.35s cubic-bezier(0.36, 0.07, 0.19, 0.97);
-        }
-        @keyframes wz-shake {
-          0%, 100% { transform: translateX(0); }
-          20% { transform: translateX(-6px); }
-          40% { transform: translateX(5px); }
-          60% { transform: translateX(-4px); }
-          80% { transform: translateX(3px); }
-        }
-
-        .wz-success {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          padding: 2.5rem 1rem;
-          gap: 0.75rem;
-          animation: wz-pop 0.5s cubic-bezier(0.34, 1.52, 0.64, 1);
-        }
-        @keyframes wz-pop {
-          0% { transform: scale(0.85); opacity: 0; }
-          100% { transform: scale(1); opacity: 1; }
-        }
-        .wz-success-icon {
-          width: 68px;
-          height: 68px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, #00c896, #00d4ff);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          box-shadow: 0 8px 24px rgba(0, 200, 150, 0.35);
-          margin-bottom: 0.5rem;
-          animation: wz-pop 0.5s 0.1s cubic-bezier(0.34, 1.52, 0.64, 1) both;
-        }
-        .wz-success-title {
-          font-family: 'Clash Display', 'Plus Jakarta Sans', sans-serif;
-          font-size: 1.25rem;
-          font-weight: 700;
-          color: #0a1628;
-        }
-        .wz-success-sub {
-          font-size: 0.85rem;
-          color: #8ca8cc;
-        }
-
+        /* FORM ELEMENTS (dari V1) */
         .wz-form {
           display: flex;
           flex-direction: column;
-          gap: 0.9rem;
+          gap: 1rem;
         }
         .wz-section-label {
           font-size: 0.7rem;
@@ -718,16 +930,12 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           color: #ef4444;
           margin-left: 2px;
         }
-        .wz-opt {
-          color: #8ca8cc;
-          font-weight: 400;
-        }
         .wz-input-wrap {
           position: relative;
           border-radius: 14px;
           overflow: hidden;
         }
-        .wz-input {
+        .wz-input, .wz-file-input {
           width: 100%;
           padding: 0.72rem 1rem;
           border: 1.5px solid #e2eaf4;
@@ -741,10 +949,15 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           position: relative;
           z-index: 1;
         }
-        .wz-input::placeholder {
+        .wz-file-input {
+          padding: 0.6rem 0.8rem;
+          background: #fafcff;
+        }
+        .wz-input::placeholder, .wz-file-input::placeholder {
           color: #b0c4de;
         }
-        .wz-input-wrap.focused .wz-input {
+        .wz-input-wrap.focused .wz-input,
+        .wz-input-wrap.focused .wz-file-input {
           border-color: #0077ff;
           background: #ffffff;
           box-shadow: 0 0 0 3px rgba(0, 119, 255, 0.12);
@@ -762,12 +975,23 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
         .wz-input-wrap.focused .wz-input-glow {
           opacity: 1;
         }
+        .file-name {
+          font-size: 0.7rem;
+          color: #0077ff;
+          margin-top: 0.2rem;
+          display: inline-block;
+        }
 
+        .wz-field-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 0.5rem;
+        }
         .wz-divider-row {
           display: flex;
           align-items: center;
           gap: 0.6rem;
-          margin: 0.2rem 0 0.1rem;
+          margin: 0.2rem 0;
         }
         .wz-divider-label {
           font-size: 0.7rem;
@@ -790,7 +1014,6 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           border: 1px solid rgba(0, 119, 255, 0.15);
           padding: 0.15rem 0.45rem;
           border-radius: 99px;
-          white-space: nowrap;
         }
 
         .wz-member-block {
@@ -801,11 +1024,6 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           display: flex;
           flex-direction: column;
           gap: 0.65rem;
-          transition: border-color 0.2s, box-shadow 0.2s;
-        }
-        .wz-member-block:hover {
-          border-color: rgba(0, 119, 255, 0.2);
-          box-shadow: 0 8px 20px rgba(0, 119, 255, 0.06);
         }
         .wz-member-header {
           display: flex;
@@ -814,7 +1032,6 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
         }
         .wz-member-icon {
           font-size: 1rem;
-          line-height: 1;
         }
         .wz-member-title {
           font-size: 0.8rem;
@@ -826,7 +1043,6 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           font-size: 0.62rem;
           font-weight: 700;
           text-transform: uppercase;
-          letter-spacing: 0.06em;
           color: #0077ff;
           background: rgba(0, 119, 255, 0.1);
           border: 1px solid rgba(0, 119, 255, 0.2);
@@ -838,13 +1054,8 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           flex-direction: column;
           gap: 0.5rem;
         }
-        .wz-field-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 0.5rem;
-        }
 
-        /* CONFIRM */
+        /* CONFIRM STEP */
         .wz-confirm {
           display: flex;
           flex-direction: column;
@@ -853,7 +1064,6 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
         .wz-confirm-intro {
           font-size: 0.85rem;
           color: #4a6fa5;
-          margin-bottom: -0.2rem;
         }
         .wz-confirm-card {
           background: linear-gradient(135deg, #f5f9ff, #f0f7ff);
@@ -874,7 +1084,6 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           font-size: 0.75rem;
           font-weight: 600;
           color: #8ca8cc;
-          flex-shrink: 0;
         }
         .wz-confirm-val {
           font-size: 0.88rem;
@@ -883,7 +1092,7 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           text-align: right;
         }
         .wz-confirm-val.highlight {
-          font-family: 'Clash Display', 'Plus Jakarta Sans', sans-serif;
+          font-family: 'Clash Display', sans-serif;
           font-weight: 700;
           background: linear-gradient(135deg, #0077ff, #00c896);
           -webkit-background-clip: text;
@@ -903,41 +1112,24 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           border: 1px solid rgba(0, 119, 255, 0.07);
           border-radius: 16px;
           padding: 0.7rem 0.9rem;
-          gap: 0.75rem;
-          animation: wz-fade-in 0.3s ease both;
-        }
-        .wz-member-confirm-row:nth-child(1) { animation-delay: 0.05s; }
-        .wz-member-confirm-row:nth-child(2) { animation-delay: 0.1s; }
-        .wz-member-confirm-row:nth-child(3) { animation-delay: 0.15s; }
-        @keyframes wz-fade-in {
-          from { opacity: 0; transform: translateY(6px); }
-          to { opacity: 1; transform: translateY(0); }
         }
         .wz-mcr-left {
           display: flex;
           align-items: center;
           gap: 0.6rem;
           flex: 1;
-          min-width: 0;
         }
         .wz-mcr-icon {
           font-size: 1.1rem;
-          flex-shrink: 0;
         }
         .wz-mcr-name {
           font-size: 0.85rem;
           font-weight: 700;
           color: #0a1628;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
         }
         .wz-mcr-email {
           font-size: 0.72rem;
           color: #8ca8cc;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
         }
         .wz-mcr-badge {
           font-size: 0.65rem;
@@ -946,13 +1138,10 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           border-radius: 99px;
           background: rgba(0, 119, 255, 0.08);
           color: #4a6fa5;
-          border: 1px solid rgba(0, 119, 255, 0.15);
-          flex-shrink: 0;
         }
         .wz-mcr-badge.ketua {
           background: linear-gradient(135deg, rgba(0,119,255,0.12), rgba(0,212,255,0.08));
           color: #0060cc;
-          border-color: rgba(0, 119, 255, 0.25);
         }
         .wz-warning {
           display: flex;
@@ -965,6 +1154,74 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           padding: 0.6rem 0.85rem;
           border-radius: 14px;
         }
+        .wz-checkbox-group {
+          margin: 0.5rem 0;
+        }
+        .wz-checkbox-label {
+          display: flex;
+          align-items: center;
+          gap: 0.6rem;
+          font-size: 0.8rem;
+          color: #1e3a5f;
+          cursor: pointer;
+        }
+        .wz-checkbox-label input {
+          width: 16px;
+          height: 16px;
+          accent-color: #0077ff;
+        }
+
+        /* ERROR & SUCCESS */
+        .wz-error {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          background: #fff1f2;
+          border: 1px solid #fecdd3;
+          color: #be123c;
+          padding: 0.65rem 0.85rem;
+          border-radius: 14px;
+          font-size: 0.8rem;
+          font-weight: 500;
+          margin-bottom: 1.2rem;
+          animation: wz-shake 0.35s;
+        }
+        @keyframes wz-shake {
+          0%,100%{transform:translateX(0)}20%{transform:translateX(-6px)}40%{transform:translateX(5px)}60%{transform:translateX(-4px)}80%{transform:translateX(3px)}
+        }
+        .wz-success {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          padding: 2.5rem 1rem;
+          gap: 0.75rem;
+          animation: wz-pop 0.5s cubic-bezier(0.34, 1.52, 0.64, 1);
+        }
+        @keyframes wz-pop {
+          from { transform: scale(0.85); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
+        }
+        .wz-success-icon {
+          width: 68px;
+          height: 68px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #00c896, #00d4ff);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          box-shadow: 0 8px 24px rgba(0, 200, 150, 0.35);
+        }
+        .wz-success-title {
+          font-family: 'Clash Display', sans-serif;
+          font-size: 1.25rem;
+          font-weight: 700;
+          color: #0a1628;
+        }
+        .wz-success-sub {
+          font-size: 0.85rem;
+          color: #8ca8cc;
+        }
 
         /* FOOTER */
         .wz-footer {
@@ -975,7 +1232,6 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           border-top: 1px solid rgba(0, 119, 255, 0.07);
           background: #fafcff;
           flex-shrink: 0;
-          gap: 0.75rem;
         }
         .wz-footer-right {
           display: flex;
@@ -985,34 +1241,25 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
         .wz-btn-ghost {
           background: transparent;
           border: none;
-          font-family: 'Plus Jakarta Sans', sans-serif;
-          font-size: 0.8rem;
           font-weight: 600;
           color: #8ca8cc;
           cursor: pointer;
           padding: 0.4rem 0.5rem;
           border-radius: 10px;
-          transition: all 0.2s;
         }
         .wz-btn-ghost:hover:not(:disabled) {
           color: #dc2626;
           background: rgba(239, 68, 68, 0.06);
-        }
-        .wz-btn-ghost:disabled {
-          opacity: 0.4;
-          cursor: not-allowed;
         }
         .wz-btn-secondary {
           background: rgba(0, 119, 255, 0.06);
           border: 1.5px solid rgba(0, 119, 255, 0.18);
           border-radius: 40px;
           padding: 0.6rem 1.15rem;
-          font-family: 'Plus Jakarta Sans', sans-serif;
           font-weight: 700;
           font-size: 0.8rem;
           color: #0060cc;
           cursor: pointer;
-          transition: all 0.22s;
         }
         .wz-btn-secondary:hover:not(:disabled) {
           background: rgba(0, 119, 255, 0.1);
@@ -1027,40 +1274,27 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           border: none;
           border-radius: 40px;
           padding: 0.65rem 1.35rem;
-          font-family: 'Plus Jakarta Sans', sans-serif;
           font-weight: 700;
           font-size: 0.82rem;
           color: white;
           cursor: pointer;
           box-shadow: 0 4px 14px rgba(0, 119, 255, 0.38);
-          transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
-          position: relative;
-          overflow: hidden;
-        }
-        .wz-btn-primary::after {
-          content: '';
-          position: absolute;
-          inset: 0;
-          background: linear-gradient(135deg, rgba(255,255,255,0.2), transparent);
-          opacity: 0;
-          transition: opacity 0.2s;
-          border-radius: 40px;
+          transition: all 0.25s;
         }
         .wz-btn-primary:hover:not(:disabled) {
           transform: translateY(-2px);
           box-shadow: 0 8px 22px rgba(0, 119, 255, 0.5);
           background-position: 100% 0;
         }
-        .wz-btn-primary:hover::after {
-          opacity: 1;
-        }
-        .wz-btn-primary:active:not(:disabled) {
-          transform: translateY(0);
-        }
         .wz-btn-primary:disabled {
           opacity: 0.65;
           cursor: not-allowed;
-          transform: none;
+        }
+        .btn-arrow {
+          transition: transform 0.2s;
+        }
+        .wz-btn-primary:hover:not(:disabled) .btn-arrow {
+          transform: translateX(4px);
         }
         .wz-spinner-wrap {
           display: flex;
@@ -1079,7 +1313,8 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           to { transform: rotate(360deg); }
         }
 
-        @media (max-width: 560px) {
+        /* RESPONSIVE */
+        @media (max-width: 640px) {
           .wz-modal {
             max-height: 92vh;
             border-radius: 26px;
@@ -1099,9 +1334,19 @@ export default function TeamRegistrationWizard({ isOpen, onSuccess }: TeamRegist
           .wz-confirm-row {
             flex-direction: column;
             gap: 0.15rem;
+            align-items: flex-start;
           }
           .wz-confirm-val {
             text-align: left;
+          }
+          .wz-steps {
+            gap: 0.3rem;
+          }
+          .wz-step-label {
+            display: none;
+          }
+          .wz-step-pill {
+            padding: 0.3rem 0.35rem;
           }
         }
       `}</style>

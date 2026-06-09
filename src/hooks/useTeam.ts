@@ -1,6 +1,6 @@
 // hooks/useTeam.ts
 import { useState, useEffect, useCallback } from 'react';
-import { teamService} from '@/Services/teamService';
+import { teamService} from '@/services/teamService';
 import { Team, CreateTeamPayload, UpdateTeamPayload } from '@/types/team';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';

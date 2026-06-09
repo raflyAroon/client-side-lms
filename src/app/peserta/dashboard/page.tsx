@@ -4,10 +4,9 @@
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
-import api from '@/lib/axios';
-import Link from 'next/link';
 import { useTeam } from '@/hooks/useTeam';
 import TeamRegistrationWizard from '@/components/TeamRegistrationWizard';
+import Link from 'next/link';
 
 /* ---------- CURSOR SPOTLIGHT ---------- */
 function CursorSpotlight() {
@@ -15,13 +14,9 @@ function CursorSpotlight() {
   const pos = useRef({ x: -999, y: -999 });
   const raf = useRef<number>(0);
   useEffect(() => {
-    const move = (e: MouseEvent) => {
-      pos.current = { x: e.clientX, y: e.clientY };
-    };
+    const move = (e: MouseEvent) => { pos.current = { x: e.clientX, y: e.clientY }; };
     const tick = () => {
-      if (ref.current) {
-        ref.current.style.transform = `translate(${pos.current.x - 250}px, ${pos.current.y - 250}px)`;
-      }
+      if (ref.current) ref.current.style.transform = `translate(${pos.current.x - 250}px, ${pos.current.y - 250}px)`;
       raf.current = requestAnimationFrame(tick);
     };
     window.addEventListener('mousemove', move, { passive: true });
@@ -32,23 +27,12 @@ function CursorSpotlight() {
     };
   }, []);
   return (
-    <div
-      ref={ref}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: 500,
-        height: 500,
-        borderRadius: '50%',
-        pointerEvents: 'none',
-        zIndex: 9999,
-        background:
-          'radial-gradient(circle, rgba(0,119,255,0.07) 0%, rgba(0,212,255,0.04) 35%, transparent 70%)',
-        willChange: 'transform',
-        mixBlendMode: 'multiply',
-      }}
-    />
+    <div ref={ref} style={{
+      position: 'fixed', top: 0, left: 0, width: 500, height: 500,
+      borderRadius: '50%', pointerEvents: 'none', zIndex: 9999,
+      background: 'radial-gradient(circle, rgba(0,119,255,0.07) 0%, rgba(0,212,255,0.04) 35%, transparent 70%)',
+      willChange: 'transform', mixBlendMode: 'multiply',
+    }} />
   );
 }
 
@@ -62,15 +46,7 @@ function ParticleCanvas() {
     if (!ctx) return;
     let raf: number;
     const colors = ['#0077ff', '#00d4ff', '#00c896', '#38bdf8'];
-    const pts: {
-      x: number;
-      y: number;
-      vx: number;
-      vy: number;
-      r: number;
-      a: number;
-      c: string;
-    }[] = [];
+    const pts: { x: number; y: number; vx: number; vy: number; r: number; a: number; c: string }[] = [];
     const resize = () => {
       canvas.width = canvas.offsetWidth;
       canvas.height = canvas.offsetHeight;
@@ -128,17 +104,10 @@ function ParticleCanvas() {
     };
   }, []);
   return (
-    <canvas
-      ref={canvasRef}
-      style={{
-        position: 'absolute',
-        inset: 0,
-        width: '100%',
-        height: '100%',
-        pointerEvents: 'none',
-        zIndex: 0,
-      }}
-    />
+    <canvas ref={canvasRef} style={{
+      position: 'absolute', inset: 0, width: '100%', height: '100%',
+      pointerEvents: 'none', zIndex: 0,
+    }} />
   );
 }
 
@@ -158,13 +127,12 @@ export default function PesertaDashboardPage() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const { team, loading: teamLoading, fetchTeam, hasTeam } = useTeam();
-  const [dashboardData, setDashboardData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const [showWizard, setShowWizard] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [scrollPct, setScrollPct] = useState(0);
-  const [showWizard, setShowWizard] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Scroll listener untuk navbar
+  // Scroll listener untuk navbar progress
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 20);
@@ -177,35 +145,16 @@ export default function PesertaDashboardPage() {
 
   // Auth redirect
   useEffect(() => {
-    if (!teamLoading){
-      if (!user) { router.push('/auth/login'); } 
-        else if (user.role !== 'peserta') { router.push('/dashboard'); }
+    if (!teamLoading) {
+      if (!user) {
+        router.replace('/auth/login');
+      } else if (user.role !== 'peserta') {
+        router.replace('/dashboard');
+      }
     }
   }, [user, teamLoading, router]);
-  // Fetch dashboard data
-  useEffect(() => {
-    const fetchDashboard = async () => {
-      if (!user) return;
-      try {
-        const res = await api.get('/dashboard/peserta');
-        setDashboardData(res.data);
-      } catch (err: any) {
-        console.error('Gagal mengambil data dashboard:', err);
-        setDashboardData({
-          progress: '0%',
-          points: '0',
-          rank: '#N/A',
-          team_name: team?.team_name || 'Belum ada tim',
-          team_members: team?.members || [],
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDashboard();
-  }, [user, team]);
 
-  // Tampilkan wizard jika user login, tim belum ada
+  // Tampilkan wizard jika user belum punya tim
   useEffect(() => {
     if (!teamLoading && user && !hasTeam) {
       setShowWizard(true);
@@ -214,18 +163,20 @@ export default function PesertaDashboardPage() {
     }
   }, [teamLoading, user, hasTeam]);
 
+  const handleWizardSuccess = async () => {
+    setShowWizard(false);
+    await fetchTeam();
+  };
+
   const handleLogout = async () => {
     await logout();
     router.push('/');
   };
 
-  const handleWizardSuccess = async () => {
-    setShowWizard(false);
-    await fetchTeam(); // refresh tim
-    try {
-      const res = await api.get('/dashboard/peserta');
-      setDashboardData(res.data);
-    } catch (err) {}
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchTeam();
+    setRefreshing(false);
   };
 
   // Intersection Observer untuk animasi scroll
@@ -244,7 +195,7 @@ export default function PesertaDashboardPage() {
     return () => observer.disconnect();
   }, []);
 
-  if (loading || teamLoading) {
+  if (teamLoading) {
     return (
       <div className="dashboard-root">
         <div className="loading-screen">Memuat dashboard peserta...</div>
@@ -269,13 +220,6 @@ export default function PesertaDashboardPage() {
       </div>
     );
   }
-
-  const stats = [
-    { label: 'Progres Submission', value: dashboardData?.progress || '0%', icon: '📊' },
-    { label: 'Poin Tim', value: dashboardData?.points || '0', icon: '🏆' },
-    { label: 'Peringkat', value: dashboardData?.rank || '#N/A', icon: '🥇' },
-    { label: 'Tim', value: team?.team_name || 'Belum ada tim', icon: '👥' },
-  ];
 
   return (
     <div className="dashboard-root">
@@ -320,95 +264,65 @@ export default function PesertaDashboardPage() {
       {/* MAIN CONTENT */}
       <main className="main-content">
         <div className="container">
-          <div className="welcome-card a">
-            <div className="welcome-glow" />
-            <h1 className="welcome-title">
-              Selamat datang, <span className="welcome-name">{user?.name}</span>!
-            </h1>
-            <p className="welcome-sub">
-              {hasTeam
-                ? 'Kelola tim, unggah submission, dan pantau progresmu di sini.'
-                : 'Silakan daftarkan tim Anda terlebih dahulu.'}
-            </p>
+          {/* PROFILE HEADER */}
+          <div className="profile-card a">
+            <div className="profile-glow" />
+            <div className="profile-avatar">
+              {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+            </div>
+            <div className="profile-info">
+              <h1 className="profile-name">{user?.name}</h1>
+              <p className="profile-email">{user?.email}</p>
+              <span className="role-badge">Peserta</span>
+            </div>
           </div>
 
-          {/* Statistik Cards */}
-          <div className="stats-grid">
-            {stats.map((stat, i) => (
-              <div key={stat.label} className="stat-card a" style={{ '--d': `${i * 0.1}s` } as any}>
-                <div className="stat-icon">{stat.icon}</div>
-                <div className="stat-value">{stat.value}</div>
-                <div className="stat-label">{stat.label}</div>
+          {/* INFORMASI TIM */}
+          {hasTeam && team && (
+            <div className="team-section a" style={{ '--d': '0.15s' } as any}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h2 className="section-title">📋 Informasi Tim</h2>
+                <button onClick={handleRefresh} className="refresh-btn" disabled={refreshing}>
+                  {refreshing ? '🔄 Memuat...' : '🔄 Refresh'}
+                </button>
               </div>
-            ))}
-          </div>
-
-          {/* Informasi Tambahan (hanya jika sudah punya tim) */}
-          {hasTeam && (
-            <>
-              <div className="info-grid">
-                <div className="info-card a" style={{ '--d': '0.2s' } as any}>
-                  <h3>📢 Pengumuman Terbaru</h3>
-                  <p>Pendaftaran tim ditutup 10 Juni 2026. Segera lengkapi data tim Anda!</p>
-                  <Link href="/announcements" className="info-link">
-                    Lihat semua →
-                  </Link>
+              <div className="team-card">
+                <div className="team-row">
+                  <span className="team-label">Nama Tim</span>
+                  <span className="team-value">{team.team_name}</span>
                 </div>
-                <div className="info-card a" style={{ '--d': '0.3s' } as any}>
-                  <h3>📝 Submission Tugas</h3>
-                  <p>Upload proposal, source code, dan video presentasi tim Anda.</p>
-                  <Link href="/peserta/submission" className="info-link">
-                    Upload sekarang →
-                  </Link>
+                <div className="team-row">
+                  <span className="team-label">Institusi</span>
+                  <span className="team-value">{team.institution || '-'}</span>
                 </div>
-                <div className="info-card a" style={{ '--d': '0.4s' } as any}>
-                  <h3>🎯 Bootcamp & Jadwal</h3>
-                  <p>Ikuti bootcamp intensif setiap Sabtu pukul 09.00 WIB.</p>
-                  <Link href="/schedule" className="info-link">
-                    Lihat jadwal →
-                  </Link>
+                <div className="team-row">
+                  <span className="team-label">Kota</span>
+                  <span className="team-value">{team.city || '-'}</span>
                 </div>
-              </div>
-
-              {/* Tabel Anggota Tim */}
-              <div className="team-card a" style={{ '--d': '0.5s' } as any}>
-                <h3>👥 Anggota Tim</h3>
-                {team?.members && team.members.length > 0 ? (
-                  <table className="team-table">
-                    <thead>
-                      <tr>
-                        <th>Nama</th>
-                        <th>Email</th>
-                        <th>Role</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {team.members.map((member, idx) => (
-                        <tr key={idx}>
-                          <td>{member.name}</td>
-                          <td>{member.email}</td>
-                          <td>{member.position === 'ketua' ? 'Ketua' : 'Anggota'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <p className="empty-team">Belum ada anggota tim.</p>
+                <div className="team-row selection-status-row">
+                  <span className="team-label">Status Seleksi</span>
+                  <span className={`status-badge ${team.selection_status || 'pending'}`}>
+                    {team.selection_status === 'pending' && '⏳ Menunggu Verifikasi'}
+                    {team.selection_status === 'approved' && '✅ Lolos Seleksi'}
+                    {team.selection_status === 'rejected' && '❌ Tidak Lolos'}
+                    {!team.selection_status && '⏳ Menunggu Verifikasi'}
+                  </span>
+                </div>
+                {team.selection_note && (
+                  <div className="team-row note-row">
+                    <span className="team-label">Catatan</span>
+                    <span className="team-note">{team.selection_note}</span>
+                  </div>
                 )}
-                <div className="team-actions">
-                  <button className="btn-outline">➕ Undang Anggota</button>
-                  <button className="btn-primary">✏️ Edit Tim</button>
-                </div>
               </div>
-            </>
+            </div>
           )}
         </div>
       </main>
 
-      {/* POPUP WIZARD - FULLSCREEN MODAL TENGAH */}
-      <div className="wizard-modal">
-        <TeamRegistrationWizard isOpen={showWizard} onSuccess={handleWizardSuccess} />
-      </div>
+      {/* WIZARD MODAL */}
+      <TeamRegistrationWizard isOpen={showWizard} onSuccess={handleWizardSuccess} />
+
       {/* GLOBAL STYLES */}
       <style jsx global>{`
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Clash+Display:wght@400;500;600;700&display=swap');
@@ -613,6 +527,25 @@ export default function PesertaDashboardPage() {
           border-color: #ef4444;
           color: #ef4444;
         }
+        .refresh-btn {
+          background: rgba(0, 119, 255, 0.1);
+          border: 1px solid rgba(0, 119, 255, 0.3);
+          border-radius: 40px;
+          padding: 0.4rem 1rem;
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: var(--c);
+          cursor: pointer;
+          transition: all 0.2s;
+        }
+        .refresh-btn:hover:not(:disabled) {
+          background: rgba(0, 119, 255, 0.2);
+          transform: translateY(-1px);
+        }
+        .refresh-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
 
         /* MAIN CONTENT */
         .main-content {
@@ -625,25 +558,27 @@ export default function PesertaDashboardPage() {
           margin: 0 auto;
         }
 
-        /* WELCOME CARD */
-        .welcome-card {
+        /* PROFILE CARD */
+        .profile-card {
           background: rgba(255, 255, 255, 0.9);
           backdrop-filter: blur(12px);
           border: 1px solid rgba(0, 119, 255, 0.15);
-          border-radius: 28px;
-          padding: 2rem 2rem;
+          border-radius: 32px;
+          padding: 1.8rem;
           margin-bottom: 2.5rem;
+          display: flex;
+          align-items: center;
+          gap: 1.8rem;
           position: relative;
           overflow: hidden;
-          box-shadow: 0 20px 40px rgba(0, 119, 255, 0.08);
           transition: all 0.4s ease;
         }
-        .welcome-card:hover {
+        .profile-card:hover {
           transform: translateY(-3px);
-          box-shadow: 0 28px 50px rgba(0, 119, 255, 0.12);
-          border-color: rgba(0, 119, 255, 0.25);
+          border-color: rgba(0, 119, 255, 0.3);
+          box-shadow: 0 20px 40px rgba(0, 119, 255, 0.12);
         }
-        .welcome-glow {
+        .profile-glow {
           position: absolute;
           top: -50%;
           right: -50%;
@@ -652,209 +587,119 @@ export default function PesertaDashboardPage() {
           background: radial-gradient(circle, rgba(0, 119, 255, 0.08), transparent 70%);
           pointer-events: none;
         }
-        .welcome-title {
+        .profile-avatar {
+          width: 80px;
+          height: 80px;
+          background: linear-gradient(135deg, var(--c), var(--cy));
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 2rem;
+          font-weight: 800;
+          color: white;
+          box-shadow: 0 8px 20px rgba(0, 119, 255, 0.3);
+        }
+        .profile-info {
+          flex: 1;
+        }
+        .profile-name {
           font-family: 'Clash Display', sans-serif;
-          font-size: 1.8rem;
+          font-size: 1.6rem;
           font-weight: 700;
           color: var(--t1);
-          margin-bottom: 0.5rem;
+          margin-bottom: 0.25rem;
         }
-        .welcome-name {
-          background: linear-gradient(135deg, var(--c), var(--tl));
-          -webkit-background-clip: text;
-          background-clip: text;
-          color: transparent;
-        }
-        .welcome-sub {
+        .profile-email {
           font-size: 0.9rem;
           color: var(--t3);
-          line-height: 1.5;
-        }
-
-        /* STATS GRID */
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 1.5rem;
-          margin-bottom: 2.5rem;
-        }
-        .stat-card {
-          background: rgba(255, 255, 255, 0.8);
-          backdrop-filter: blur(12px);
-          border: 1px solid rgba(0, 119, 255, 0.12);
-          border-radius: 24px;
-          padding: 1.5rem;
-          text-align: center;
-          transition: all 0.3s ease;
-          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.02);
-        }
-        .stat-card:hover {
-          transform: translateY(-5px);
-          border-color: rgba(0, 119, 255, 0.3);
-          box-shadow: 0 12px 32px rgba(0, 119, 255, 0.1);
-          background: rgba(255, 255, 255, 0.95);
-        }
-        .stat-icon {
-          font-size: 2rem;
           margin-bottom: 0.5rem;
         }
-        .stat-value {
-          font-family: 'Clash Display', sans-serif;
-          font-size: 1.8rem;
-          font-weight: 800;
+        .role-badge {
+          display: inline-block;
+          background: rgba(0, 119, 255, 0.12);
           color: var(--c);
-          margin-bottom: 0.3rem;
-        }
-        .stat-label {
-          font-size: 0.8rem;
-          font-weight: 600;
-          color: var(--t3);
-          text-transform: uppercase;
-          letter-spacing: 0.03em;
-        }
-
-        /* INFO GRID */
-        .info-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 1.5rem;
-          margin-bottom: 2.5rem;
-        }
-        .info-card {
-          background: rgba(255, 255, 255, 0.8);
-          backdrop-filter: blur(12px);
-          border: 1px solid rgba(0, 119, 255, 0.12);
-          border-radius: 24px;
-          padding: 1.5rem;
-          transition: all 0.3s ease;
-        }
-        .info-card:hover {
-          transform: translateY(-3px);
-          border-color: rgba(0, 119, 255, 0.25);
-          background: rgba(255, 255, 255, 0.95);
-        }
-        .info-card h3 {
-          font-family: 'Clash Display', sans-serif;
-          font-size: 1.1rem;
           font-weight: 700;
-          color: var(--t1);
-          margin-bottom: 0.75rem;
-        }
-        .info-card p {
-          font-size: 0.85rem;
-          color: var(--t3);
-          line-height: 1.6;
-          margin-bottom: 1rem;
-        }
-        .info-link {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.3rem;
-          font-size: 0.8rem;
-          font-weight: 600;
-          color: var(--c);
-          text-decoration: none;
-          transition: gap 0.2s;
-        }
-        .info-link:hover {
-          gap: 0.5rem;
-          color: var(--cy);
+          font-size: 0.7rem;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          padding: 0.3rem 1rem;
+          border-radius: 100px;
+          border: 1px solid rgba(0, 119, 255, 0.2);
         }
 
-        /* TEAM CARD */
-        .team-card {
-          background: rgba(255, 255, 255, 0.8);
-          backdrop-filter: blur(12px);
-          border: 1px solid rgba(0, 119, 255, 0.12);
-          border-radius: 24px;
-          padding: 1.5rem;
-          transition: all 0.3s ease;
-        }
-        .team-card h3 {
+        /* TEAM SECTION */
+        .section-title {
           font-family: 'Clash Display', sans-serif;
           font-size: 1.2rem;
           font-weight: 700;
           color: var(--t1);
           margin-bottom: 1rem;
         }
-        .team-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 1.5rem;
+        .team-card {
+          background: rgba(255, 255, 255, 0.9);
+          backdrop-filter: blur(12px);
+          border: 1px solid rgba(0, 119, 255, 0.15);
+          border-radius: 28px;
+          padding: 1.5rem;
+          transition: all 0.3s ease;
         }
-        .team-table th,
-        .team-table td {
-          padding: 0.75rem;
-          text-align: left;
-          border-bottom: 1px solid rgba(0, 119, 255, 0.1);
-          font-size: 0.85rem;
+        .team-card:hover {
+          transform: translateY(-3px);
+          border-color: rgba(0, 119, 255, 0.25);
+          box-shadow: 0 12px 28px rgba(0, 119, 255, 0.1);
         }
-        .team-table th {
-          font-weight: 700;
-          color: var(--t2);
-          background: rgba(0, 119, 255, 0.03);
-        }
-        .team-table td {
-          color: var(--t3);
-        }
-        .empty-team {
-          text-align: center;
-          padding: 2rem;
-          color: var(--tm);
-          font-size: 0.85rem;
-          background: rgba(0, 119, 255, 0.03);
-          border-radius: 16px;
-          margin-bottom: 1.5rem;
-        }
-        .team-actions {
+        .team-row {
           display: flex;
+          align-items: baseline;
           gap: 1rem;
-          justify-content: flex-end;
+          padding: 0.7rem 0;
+          border-bottom: 1px solid rgba(0, 119, 255, 0.08);
         }
-        .btn-outline {
-          background: transparent;
-          border: 1.5px solid rgba(0, 119, 255, 0.3);
-          border-radius: 40px;
-          padding: 0.6rem 1.2rem;
-          font-weight: 600;
-          font-size: 0.8rem;
-          color: var(--c);
-          cursor: pointer;
-          transition: all 0.2s;
+        .team-row:last-child {
+          border-bottom: none;
         }
-        .btn-outline:hover {
-          background: rgba(0, 119, 255, 0.08);
-          border-color: var(--c);
+        .team-label {
+          width: 130px;
+          font-weight: 700;
+          font-size: 0.85rem;
+          color: var(--t2);
         }
-        .btn-primary {
-          background: linear-gradient(135deg, var(--c), var(--cy));
-          border: none;
-          border-radius: 40px;
-          padding: 0.6rem 1.2rem;
-          font-weight: 600;
-          font-size: 0.8rem;
-          color: white;
-          cursor: pointer;
-          transition: all 0.2s;
-          box-shadow: 0 4px 12px rgba(0, 119, 255, 0.3);
+        .team-value {
+          flex: 1;
+          font-size: 0.9rem;
+          color: var(--t1);
+          font-weight: 500;
         }
-        .btn-primary:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 20px rgba(0, 119, 255, 0.4);
+        .status-badge {
+          padding: 0.25rem 0.8rem;
+          border-radius: 100px;
+          font-size: 0.75rem;
+          font-weight: 700;
+          display: inline-block;
+        }
+        .status-badge.pending {
+          background: #fef3c7;
+          color: #b45309;
+        }
+        .status-badge.approved {
+          background: #d1fae5;
+          color: #065f46;
+        }
+        .status-badge.rejected {
+          background: #fee2e2;
+          color: #991b1b;
+        }
+        .team-note {
+          flex: 1;
+          font-size: 0.85rem;
+          color: #4b5563;
+          background: #f8fafc;
+          padding: 0.4rem 0.8rem;
+          border-radius: 12px;
         }
 
-        .wizard-modul {
-        position: fixed;
-top: 0;
-left: 0;
-width: 100%;
-height: 100%;
-display: flex;
-align-items: center;
-justify-content: center;
-z-index: 1000;
-        }
-        /* ANIMATION */
+        /* ANIMATION SCROLL */
         .a {
           opacity: 0;
           transform: translateY(20px);
@@ -868,20 +713,9 @@ z-index: 1000;
         }
 
         /* RESPONSIVE */
-        @media (max-width: 1024px) {
-          .stats-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
-          .info-grid {
-            grid-template-columns: 1fr;
-          }
-        }
         @media (max-width: 768px) {
           .main-content {
             padding: 1.5rem;
-          }
-          .stats-grid {
-            grid-template-columns: 1fr;
           }
           .nav-in {
             padding: 0.75rem 1rem;
@@ -892,8 +726,17 @@ z-index: 1000;
           .ui {
             display: none;
           }
-          .welcome-title {
-            font-size: 1.4rem;
+          .profile-card {
+            flex-direction: column;
+            text-align: center;
+            gap: 1rem;
+          }
+          .team-row {
+            flex-direction: column;
+            gap: 0.3rem;
+          }
+          .team-label {
+            width: auto;
           }
         }
       `}</style>

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { publicApi, Announcement, Faq } from '@/Services/publicApi';
+import { publicApi, Announcement, Faq } from '@/services/publicApi';
 
 interface PublicDataContextType {
   announcements: Announcement[];
