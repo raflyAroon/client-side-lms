@@ -6,123 +6,103 @@ import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useTeam } from '@/hooks/useTeam';
 import TeamRegistrationWizard from '@/components/TeamRegistrationWizard';
+import Navbar from '@/components/layout/peserta/navbar';
+import SidebarMenu from '@/components/layout/peserta/sidebarMenu';
 import Link from 'next/link';
 
-/* ---------- CURSOR SPOTLIGHT ---------- */
-function CursorSpotlight() {
-  const ref = useRef<HTMLDivElement>(null);
-  const pos = useRef({ x: -999, y: -999 });
-  const raf = useRef<number>(0);
+/* ═══════════════════════════════════════════════════════
+   ANIMATED COUNTER
+═══════════════════════════════════════════════════════ */
+function Counter({ to, suffix = '', prefix = '' }: { to: number; suffix?: string; prefix?: string }) {
+  const [val, setVal] = useState(0);
+  const spanRef = useRef<HTMLSpanElement>(null);
+  const ran = useRef(false);
+
   useEffect(() => {
-    const move = (e: MouseEvent) => { pos.current = { x: e.clientX, y: e.clientY }; };
-    const tick = () => {
-      if (ref.current) ref.current.style.transform = `translate(${pos.current.x - 250}px, ${pos.current.y - 250}px)`;
-      raf.current = requestAnimationFrame(tick);
-    };
-    window.addEventListener('mousemove', move, { passive: true });
-    raf.current = requestAnimationFrame(tick);
-    return () => {
-      window.removeEventListener('mousemove', move);
-      cancelAnimationFrame(raf.current);
-    };
-  }, []);
+    const el = spanRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting || ran.current) return;
+        ran.current = true;
+        obs.disconnect();
+        const duration = 1400;
+        const start = performance.now();
+        const tick = (now: number) => {
+          const p = Math.min((now - start) / duration, 1);
+          const ease = p === 1 ? 1 : 1 - Math.pow(2, -10 * p);
+          setVal(Math.round(ease * to));
+          if (p < 1) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      },
+      { threshold: 0.4 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [to]);
+
+  return <span ref={spanRef}>{prefix}{val}{suffix}</span>;
+}
+
+/* ═══════════════════════════════════════════════════════
+   ACTION CARD (tanpa tilt, hanya fade-up)
+═══════════════════════════════════════════════════════ */
+interface ActionCardProps {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+  colorVar: string;
+  delay?: number;
+}
+
+function ActionCard({ href, icon, label, colorVar, delay = 0 }: ActionCardProps) {
   return (
-    <div ref={ref} style={{
-      position: 'fixed', top: 0, left: 0, width: 500, height: 500,
-      borderRadius: '50%', pointerEvents: 'none', zIndex: 9999,
-      background: 'radial-gradient(circle, rgba(0,119,255,0.07) 0%, rgba(0,212,255,0.04) 35%, transparent 70%)',
-      willChange: 'transform', mixBlendMode: 'multiply',
-    }} />
+    <Link
+      href={href}
+      className="ac-link fade-up"
+      style={{ '--fd': `${delay}ms` } as React.CSSProperties}
+    >
+      <div className="ac">
+        <div className="ac-icon-box" style={{ '--ic': colorVar } as React.CSSProperties}>
+          {icon}
+        </div>
+        <div className="ac-body">
+          <span className="ac-label">{label}</span>
+        </div>
+      </div>
+    </Link>
   );
 }
 
-/* ---------- PARTICLE CANVAS ---------- */
-function ParticleCanvas() {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    let raf: number;
-    const colors = ['#0077ff', '#00d4ff', '#00c896', '#38bdf8'];
-    const pts: { x: number; y: number; vx: number; vy: number; r: number; a: number; c: string }[] = [];
-    const resize = () => {
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
-    };
-    resize();
-    window.addEventListener('resize', resize);
-    for (let i = 0; i < 55; i++) {
-      pts.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        vx: (Math.random() - 0.5) * 0.3,
-        vy: (Math.random() - 0.5) * 0.3,
-        r: Math.random() * 2 + 0.5,
-        a: Math.random() * 0.35 + 0.08,
-        c: colors[Math.floor(Math.random() * colors.length)],
-      });
-    }
-    const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      pts.forEach((p) => {
-        p.x += p.vx;
-        p.y += p.vy;
-        if (p.x < 0) p.x = canvas.width;
-        if (p.x > canvas.width) p.x = 0;
-        if (p.y < 0) p.y = canvas.height;
-        if (p.y > canvas.height) p.y = 0;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = p.c;
-        ctx.globalAlpha = p.a;
-        ctx.fill();
-      });
-      ctx.globalAlpha = 1;
-      for (let i = 0; i < pts.length; i++) {
-        for (let j = i + 1; j < pts.length; j++) {
-          const dx = pts[i].x - pts[j].x;
-          const dy = pts[i].y - pts[j].y;
-          const d = Math.sqrt(dx * dx + dy * dy);
-          if (d < 120) {
-            ctx.beginPath();
-            ctx.moveTo(pts[i].x, pts[i].y);
-            ctx.lineTo(pts[j].x, pts[j].y);
-            ctx.strokeStyle = `rgba(0,150,255,${0.08 * (1 - d / 120)})`;
-            ctx.lineWidth = 0.5;
-            ctx.stroke();
-          }
-        }
-      }
-      raf = requestAnimationFrame(draw);
-    };
-    draw();
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', resize);
-    };
-  }, []);
-  return (
-    <canvas ref={canvasRef} style={{
-      position: 'absolute', inset: 0, width: '100%', height: '100%',
-      pointerEvents: 'none', zIndex: 0,
-    }} />
-  );
-}
+/* ═══════════════════════════════════════════════════════
+   SVG ICONS
+═══════════════════════════════════════════════════════ */
+const IconStatus = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+  </svg>
+);
+const IconTeam = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+    <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+  </svg>
+);
+const IconCode = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+  </svg>
+);
+const IconBolt = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+  </svg>
+);
 
-/* ---------- FLOATING BLOBS ---------- */
-function FloatingBlobs() {
-  return (
-    <>
-      <div className="blob b1" />
-      <div className="blob b2" />
-      <div className="blob b3" />
-    </>
-  );
-}
-
-/* ---------- MAIN COMPONENT ---------- */
+/* ═══════════════════════════════════════════════════════
+   MAIN PAGE
+═══════════════════════════════════════════════════════ */
 export default function PesertaDashboardPage() {
   const { user, logout } = useAuth();
   const router = useRouter();
@@ -130,91 +110,144 @@ export default function PesertaDashboardPage() {
   const [showWizard, setShowWizard] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [scrollPct, setScrollPct] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  // Scroll listener untuk navbar progress
+  // Scroll progress
   useEffect(() => {
-    const handleScroll = () => {
+    const fn = () => {
       setScrolled(window.scrollY > 20);
       const h = document.documentElement.scrollHeight - window.innerHeight;
-      if (h > 0) setScrollPct(Math.min((window.scrollY / h) * 100, 100));
+      setScrollPct(h > 0 ? Math.min((window.scrollY / h) * 100, 100) : 0);
     };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', fn, { passive: true });
+    return () => window.removeEventListener('scroll', fn);
   }, []);
 
-  // Auth redirect
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!menuOpen) return;
+    const fn = (e: MouseEvent) => {
+      const target = e.target as Element;
+      if (!target.closest('.nav-pill')) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', fn);
+    return () => document.removeEventListener('mousedown', fn);
+  }, [menuOpen]);
+
+  // Auth guard
   useEffect(() => {
     if (!teamLoading) {
-      if (!user) {
-        router.replace('/auth/login');
-      } else if (user.role !== 'peserta') {
-        router.replace('/dashboard');
-      }
+      if (!user) router.replace('/auth/login');
+      else if (user.role !== 'peserta') router.replace('/dashboard');
     }
   }, [user, teamLoading, router]);
 
-  // Tampilkan wizard jika user belum punya tim
+  // Wizard
   useEffect(() => {
-    if (!teamLoading && user && !hasTeam) {
-      setShowWizard(true);
-    } else {
-      setShowWizard(false);
-    }
+    if (!teamLoading && user && !hasTeam) setShowWizard(true);
+    else setShowWizard(false);
   }, [teamLoading, user, hasTeam]);
 
-  const handleWizardSuccess = async () => {
-    setShowWizard(false);
-    await fetchTeam();
-  };
-
-  const handleLogout = async () => {
-    await logout();
-    router.push('/');
-  };
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await fetchTeam();
-    setRefreshing(false);
-  };
-
-  // Intersection Observer untuk animasi scroll
+  // Scroll-reveal (fade-up) untuk konten kanan
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('ai');
-          }
-        });
-      },
+    if (teamLoading) return;
+    const obs = new IntersectionObserver(
+      (entries) => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('in'); }),
       { threshold: 0.1 }
     );
-    document.querySelectorAll('.a').forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
-  }, []);
+    const t = setTimeout(() => {
+      document.querySelectorAll('.fade-up').forEach(el => obs.observe(el));
+    }, 60);
+    return () => { clearTimeout(t); obs.disconnect(); };
+  }, [teamLoading]);
 
+  const handleWizardSuccess = async () => { setShowWizard(false); await fetchTeam(); };
+  const handleLogout = async () => { await logout(); router.push('/'); };
+
+  const initials = (user?.name || 'U').charAt(0).toUpperCase();
+  const firstName = user?.name?.split(' ')[0] || 'Peserta';
+
+  const statusLabel =
+    team?.selection_status === 'lolos_seleksi' ? 'Lolos Seleksi'
+    : team?.selection_status === 'rejected'     ? 'Tidak Lolos'
+    : team?.selection_status ?? 'Menunggu';
+  const statusColor =
+    team?.selection_status === 'lolos_seleksi' ? '#059669'
+    : team?.selection_status === 'rejected'     ? '#dc2626'
+    : '#4F46E5';
+
+  // Loading screen
   if (teamLoading) {
     return (
-      <div className="dashboard-root">
-        <div className="loading-screen">Memuat dashboard peserta...</div>
+      <div className="loader-root">
+        <div className="loader-card">
+          <div className="loader-rings">
+            <div className="lr lr1" /><div className="lr lr2" /><div className="lr lr3" />
+          </div>
+          <p className="loader-text">Memuat dashboard…</p>
+        </div>
         <style jsx>{`
-          .dashboard-root {
+          .loader-root {
             min-height: 100vh;
-            background: linear-gradient(145deg, #f0f7ff 0%, #e9f2fa 100%);
+            background: #F8FAFF;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'DM Sans', system-ui, sans-serif;
+          }
+          .loader-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+            background: white;
+            border: 1px solid rgba(79,70,229,0.10);
+            border-radius: 28px;
+            padding: 3rem 4rem;
+            box-shadow: 0 10px 40px rgba(79,70,229,0.10);
+          }
+          .loader-rings {
+            position: relative;
+            width: 52px;
+            height: 52px;
             display: flex;
             align-items: center;
             justify-content: center;
           }
-          .loading-screen {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            font-size: 1.2rem;
-            color: var(--t1);
-            background: rgba(255, 255, 255, 0.8);
-            backdrop-filter: blur(12px);
-            padding: 2rem 3rem;
-            border-radius: 28px;
+          .lr {
+            position: absolute;
+            border-radius: 50%;
+            border-style: solid;
+            border-color: transparent;
+          }
+          .lr1 {
+            inset: 0;
+            border-width: 3px;
+            border-top-color: #4F46E5;
+            animation: spinRing 0.9s linear infinite;
+          }
+          .lr2 {
+            inset: 7px;
+            border-width: 2.5px;
+            border-right-color: #0EA5E9;
+            animation: spinRingReverse 1.1s linear infinite;
+          }
+          .lr3 {
+            inset: 14px;
+            border-width: 2px;
+            border-bottom-color: #059669;
+            animation: spinRing 1.3s linear infinite;
+          }
+          @keyframes spinRing {
+            to { transform: rotate(360deg); }
+          }
+          @keyframes spinRingReverse {
+            to { transform: rotate(-360deg); }
+          }
+          .loader-text {
+            font-size: 0.88rem;
+            font-weight: 500;
+            color: #94A3B8;
           }
         `}</style>
       </div>
@@ -222,521 +255,529 @@ export default function PesertaDashboardPage() {
   }
 
   return (
-    <div className="dashboard-root">
-      <CursorSpotlight />
-      <div className="bg-layer">
-        <ParticleCanvas />
-        <FloatingBlobs />
-        <div className="bg-grid" />
+    <div className="root">
+
+      {/* Background dekoratif */}
+      <div className="bg" aria-hidden>
+        <div className="bg-noise" />
+        <div className="bg-orb bg-orb-1" />
+        <div className="bg-orb bg-orb-2" />
+        <div className="bg-lines" />
       </div>
 
-      {/* NAVBAR */}
-      <nav className={`nav ${scrolled ? 'nav-s' : ''}`}>
-        <div className="nav-prog">
-          <div style={{ width: `${scrollPct}%` }} className="nav-prog-fill" />
-        </div>
-        <div className="nav-in">
-          <div className="nav-brand">
-            <Link href="/" className="brand-link">
-              <div className="brand-icon">H</div>
-              <span className="brand-name">Hackathon MPR RI</span>
-            </Link>
-          </div>
-          <div className="nav-r">
-            <div className="nav-user">
-              <div className="uav">{(user?.name || 'P').charAt(0).toUpperCase()}</div>
-              <div className="ui">
-                <span className="un">{user?.name || 'Peserta'}</span>
-                <span className="ur">Peserta</span>
-              </div>
-              <button onClick={handleLogout} className="logout-btn" title="Logout">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                  <polyline points="16 17 21 12 16 7" />
-                  <line x1="21" y1="12" x2="9" y2="12" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <Navbar user={user} onLogout={handleLogout} scrolled={scrolled} scrollPercent={scrollPct} menuOpen={menuOpen} setMenuOpen={setMenuOpen} />
 
-      {/* MAIN CONTENT */}
-      <main className="main-content">
-        <div className="container">
-          {/* PROFILE HEADER */}
-          <div className="profile-card a">
-            <div className="profile-glow" />
-            <div className="profile-avatar">
-              {user?.name?.charAt(0)?.toUpperCase() || 'U'}
-            </div>
-            <div className="profile-info">
-              <h1 className="profile-name">{user?.name}</h1>
-              <p className="profile-email">{user?.email}</p>
-              <span className="role-badge">Peserta</span>
-            </div>
-          </div>
+      <main className="main">
+        <div className="dashboard-layout">
+          {/* SIDEBAR KIRI - Sticky dengan 3 Action Cards */}
+          <aside className="sidebar">
+            <SidebarMenu/>  
+          </aside>
 
-          {/* INFORMASI TIM */}
-          {hasTeam && team && (
-            <div className="team-section a" style={{ '--d': '0.15s' } as any}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h2 className="section-title">📋 Informasi Tim</h2>
-                <button onClick={handleRefresh} className="refresh-btn" disabled={refreshing}>
-                  {refreshing ? '🔄 Memuat...' : '🔄 Refresh'}
-                </button>
-              </div>
-              <div className="team-card">
-                <div className="team-row">
-                  <span className="team-label">Nama Tim</span>
-                  <span className="team-value">{team.team_name}</span>
-                </div>
-                <div className="team-row">
-                  <span className="team-label">Institusi</span>
-                  <span className="team-value">{team.institution || '-'}</span>
-                </div>
-                <div className="team-row">
-                  <span className="team-label">Kota</span>
-                  <span className="team-value">{team.city || '-'}</span>
-                </div>
-                <div className="team-row selection-status-row">
-                  <span className="team-label">Status Seleksi</span>
-                  <span className={`status-badge ${team.selection_status || 'pending'}`}>
-                    {team.selection_status === 'pending' && '⏳ Menunggu Verifikasi'}
-                    {team.selection_status === 'approved' && '✅ Lolos Seleksi'}
-                    {team.selection_status === 'rejected' && '❌ Tidak Lolos'}
-                    {!team.selection_status && '⏳ Menunggu Verifikasi'}
-                  </span>
-                </div>
-                {team.selection_note && (
-                  <div className="team-row note-row">
-                    <span className="team-label">Catatan</span>
-                    <span className="team-note">{team.selection_note}</span>
+          {/* KONTEN UTAMA KANAN */}
+          <div className="content-main">
+            {/* Hero Section */}
+            <section className="hero fade-up" style={{ '--fd': '0ms' } as React.CSSProperties}>
+              <div className="hero-left">
+                <span className="hero-chip">
+                  <span className="hero-chip-dot" />
+                  Dashboard Peserta
+                </span>
+                <h1 className="hero-h1">
+                  Halo,{' '}
+                  <span className="hero-accent">{firstName}</span>
+                  <span className="hero-wave"> 👋</span>
+                </h1>
+                <p className="hero-lead">
+                  Pantau progres tim, cek status seleksi, dan kumpulkan karyamu — semua dari sini.
+                </p>
+                {hasTeam && team && (
+                  <div className="hero-status">
+                    <span className="hs-dot" style={{ background: statusColor }} />
+                    <span className="hs-label">Status tim:</span>
+                    <strong className="hs-val" style={{ color: statusColor }}>{statusLabel}</strong>
+                    {team.selection_note && <span className="hs-note">— {team.selection_note}</span>}
                   </div>
                 )}
               </div>
-            </div>
-          )}
+
+              <div className="id-card">
+                <div className="idc-shimmer" />
+                <div className="idc-top">
+                  <div className="idc-logo"><IconBolt /></div>
+                  <span className="idc-event">MPR RI · 2026</span>
+                </div>
+                <div className="idc-av-wrap">
+                  <div className="idc-av">{initials}</div>
+                  <div className="idc-av-ring" />
+                </div>
+                <div className="idc-info">
+                  <p className="idc-name">{user?.name || '—'}</p>
+                  <p className="idc-email">{user?.email || '—'}</p>
+                </div>
+                <div className="idc-foot">
+                  <span className="idc-badge">Peserta Resmi</span>
+                  <span className="idc-id">ID: {String(user?.id ?? '—').padStart(5, '0')}</span>
+                </div>
+              </div>
+            </section>
+
+            {/* Panduan Panel */}
+            <section className="panel fade-up" style={{ '--fd': '80ms' } as React.CSSProperties}>
+              <div className="panel-hd">
+                <div>
+                  <h2 className="panel-title">Panduan Peserta</h2>
+                  <p className="panel-sub">Hal penting yang perlu kamu perhatikan</p>
+                </div>
+              </div>
+              <div className="guide-grid">
+                {[
+                  { num: '01', title: 'Lengkapi Data Tim', body: 'Pastikan semua anggota sudah mengisi data diri lengkap. Data yang belum lengkap dapat mempengaruhi penilaian.' },
+                  { num: '02', title: 'Upload Logbook Harian', body: 'Logbook wajib diupload setiap hari selama periode hackathon. Keterlambatan upload akan mengurangi skor proses.' },
+                  { num: '03', title: 'Pantau Email & Notifikasi', body: 'Pengumuman resmi dikirim via email terdaftar. Cek secara berkala agar tidak ketinggalan informasi penting.' },
+                ].map(g => (
+                  <div className="guide-card" key={g.num}>
+                    <span className="guide-num">{g.num}</span>
+                    <h3 className="guide-title">{g.title}</h3>
+                    <p className="guide-body">{g.body}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
         </div>
       </main>
 
-      {/* WIZARD MODAL */}
       <TeamRegistrationWizard isOpen={showWizard} onSuccess={handleWizardSuccess} />
 
-      {/* GLOBAL STYLES */}
+      {/* ========== GLOBAL STYLES ========== */}
       <style jsx global>{`
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Clash+Display:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700;12..96,800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
         :root {
-          --c: #0077ff;
-          --cy: #00d4ff;
-          --tl: #00c896;
-          --t1: #0a1628;
-          --t2: #1e3a5f;
-          --t3: #4a6fa5;
-          --tm: #8ca8cc;
-          --bg-glass: rgba(255, 255, 255, 0.96);
+          --indigo:      #4F46E5;
+          --indigo-50:   #EEF2FF;
+          --indigo-100:  #E0E7FF;
+          --indigo-200:  #C7D2FE;
+          --indigo-600:  #4338CA;
+          --sky:         #0EA5E9;
+          --emerald:     #059669;
+          --ink:         #0F172A;
+          --ink-2:       #334155;
+          --ink-3:       #64748B;
+          --ink-4:       #94A3B8;
+          --white:       #FFFFFF;
+          --bg:          #F8FAFF;
+          --surface-2:   #F1F5FF;
+          --border:      rgba(79,70,229,0.12);
+          --shadow-sm:   0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+          --shadow-md:   0 4px 12px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03);
+          --shadow-lg:   0 12px 28px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.02);
+          --shadow-xl:   0 20px 40px rgba(0,0,0,0.1), 0 4px 12px rgba(0,0,0,0.04);
+          --radius-md:    16px;
+          --radius-lg:    20px;
+          --radius-xl:    24px;
+          --radius-2xl:   32px;
+          --ff-display:  'Bricolage Grotesque', system-ui, sans-serif;
+          --ff-body:     'DM Sans', system-ui, sans-serif;
+          --ease:        cubic-bezier(0.2, 0.9, 0.4, 1.1);
         }
-        * {
-          margin: 0;
-          padding: 0;
-          box-sizing: border-box;
-        }
+
         body {
-          background: linear-gradient(145deg, #f0f7ff 0%, #e9f2fa 100%);
-          font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+          background: var(--bg);
+          font-family: var(--ff-body);
+          color: var(--ink);
+          -webkit-font-smoothing: antialiased;
           overflow-x: hidden;
+          line-height: 1.6;
+        }
+        a { text-decoration: none; color: inherit; }
+
+        @keyframes fadeUpIn {
+          from { opacity: 0; transform: translateY(24px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes orbDrift {
+          0%,100% { transform: translate(0,0) scale(1); }
+          40%     { transform: translate(24px,-18px) scale(1.05); }
+          70%     { transform: translate(-16px,12px) scale(0.97); }
+        }
+        @keyframes spinRing { to { transform: rotate(360deg); } }
+        @keyframes pulsePing {
+          0%   { transform: scale(1); opacity: 0.7; }
+          100% { transform: scale(2.6); opacity: 0; }
+        }
+        @keyframes shimmer {
+          0%   { transform: translateX(-100%) skewX(-12deg); }
+          100% { transform: translateX(200%) skewX(-12deg); }
+        }
+        @keyframes waveHand {
+          0%,100% { transform: rotate(0deg); }
+          25%     { transform: rotate(18deg); }
+          50%     { transform: rotate(-8deg); }
+          75%     { transform: rotate(14deg); }
+        }
+        @keyframes dotBlink {
+          0%,100% { opacity: 1; }
+          50%     { opacity: 0.3; }
+        }
+        .fade-up {
+          opacity: 0;
+          transform: translateY(24px);
+          transition: opacity 0.6s var(--ease), transform 0.6s var(--ease);
+          transition-delay: var(--fd, 0ms);
+        }
+        .fade-up.in {
+          opacity: 1;
+          transform: translateY(0);
         }
       `}</style>
 
+      {/* ========== SCOPED STYLES ========== */}
       <style jsx>{`
-        .dashboard-root {
+        .root {
           min-height: 100vh;
           position: relative;
-          overflow-x: hidden;
         }
 
-        /* BACKGROUND LAYER */
-        .bg-layer {
+        /* Background */
+        .bg {
           position: fixed;
           inset: 0;
-          z-index: 0;
           pointer-events: none;
+          z-index: 0;
+          overflow: hidden;
         }
-        .bg-grid {
+        .bg-noise {
           position: absolute;
           inset: 0;
-          background-image: linear-gradient(rgba(0, 119, 255, 0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(0, 119, 255, 0.03) 1px, transparent 1px);
-          background-size: 48px 48px;
+          opacity: 0.02;
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+          background-size: 200px 200px;
         }
-        .blob {
+        .bg-orb {
           position: absolute;
           border-radius: 50%;
           filter: blur(80px);
-          pointer-events: none;
-          z-index: 0;
+          animation: orbDrift 22s ease-in-out infinite;
         }
-        .b1 {
-          width: 500px;
-          height: 500px;
-          background: radial-gradient(circle, rgba(0, 119, 255, 0.12), transparent 70%);
-          top: -200px;
-          left: -150px;
-          animation: floatBlob 16s ease-in-out infinite;
+        .bg-orb-1 {
+          width: 640px; height: 640px;
+          background: radial-gradient(circle, rgba(79,70,229,0.08) 0%, transparent 65%);
+          top: -200px; left: -180px;
         }
-        .b2 {
-          width: 450px;
-          height: 450px;
-          background: radial-gradient(circle, rgba(0, 212, 255, 0.1), transparent 70%);
-          bottom: -150px;
-          right: -120px;
-          animation: floatBlob 18s ease-in-out infinite reverse;
+        .bg-orb-2 {
+          width: 500px; height: 500px;
+          background: radial-gradient(circle, rgba(14,165,233,0.06) 0%, transparent 65%);
+          bottom: -100px; right: -100px;
+          animation-duration: 28s; animation-direction: reverse;
         }
-        .b3 {
-          width: 320px;
-          height: 320px;
-          background: radial-gradient(circle, rgba(0, 200, 150, 0.08), transparent 65%);
-          top: 30%;
-          left: 30%;
-          animation: floatBlob 14s ease-in-out infinite 1s;
-        }
-        @keyframes floatBlob {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          50% { transform: translate(30px, -20px) scale(1.05); }
-        }
-
-        /* NAVBAR */
-        .nav {
-          position: sticky;
-          top: 0;
-          z-index: 500;
-          background: rgba(255, 255, 255, 0.96);
-          backdrop-filter: blur(12px);
-          border-bottom: 1px solid rgba(0, 119, 255, 0.12);
-          transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
-        }
-        .nav.nav-s {
-          background: rgba(255, 255, 255, 0.25);
-          backdrop-filter: blur(16px) saturate(180%);
-          border-bottom: 2px solid rgba(0, 119, 255, 0.3);
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 119, 255, 0.05) inset;
-        }
-        .nav-prog {
+        .bg-lines {
           position: absolute;
-          bottom: 0;
-          left: 0;
-          width: 100%;
-          height: 2px;
-          background: rgba(0, 119, 255, 0.06);
-        }
-        .nav-prog-fill {
-          height: 100%;
-          background: linear-gradient(90deg, var(--c), var(--tl));
-          transition: width 0.2s;
-        }
-        .nav-in {
-          max-width: 1340px;
-          margin: 0 auto;
-          padding: 0.8rem 2rem;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 1.5rem;
-        }
-        .nav-brand {
-          display: flex;
-          align-items: center;
-        }
-        .brand-link {
-          display: flex;
-          align-items: center;
-          gap: 0.65rem;
-          text-decoration: none;
-        }
-        .brand-icon {
-          width: 36px;
-          height: 36px;
-          border-radius: 10px;
-          background: linear-gradient(135deg, var(--c), var(--cy));
-          color: white;
-          font-family: 'Clash Display', sans-serif;
-          font-weight: 800;
-          font-size: 0.95rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 4px 12px rgba(0, 119, 255, 0.3);
-        }
-        .brand-name {
-          font-family: 'Clash Display', sans-serif;
-          font-weight: 700;
-          font-size: 0.95rem;
-          color: var(--t1);
-        }
-        .nav-r {
-          display: flex;
-          align-items: center;
-        }
-        .nav-user {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-        }
-        .uav {
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, var(--c), var(--cy));
-          color: #fff;
-          font-weight: 800;
-          font-size: 0.9rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 0 0 3px rgba(0, 119, 255, 0.15);
-        }
-        .ui {
-          text-align: right;
-        }
-        .un {
-          display: block;
-          font-weight: 700;
-          font-size: 0.84rem;
-          color: var(--t1);
-        }
-        .ur {
-          display: block;
-          font-size: 0.68rem;
-          color: var(--tm);
-        }
-        .logout-btn {
-          background: rgba(0, 119, 255, 0.08);
-          border: 1px solid rgba(0, 119, 255, 0.2);
-          border-radius: 10px;
-          width: 36px;
-          height: 36px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          color: var(--t3);
-          transition: all 0.25s;
-        }
-        .logout-btn:hover {
-          background: rgba(239, 68, 68, 0.15);
-          border-color: #ef4444;
-          color: #ef4444;
-        }
-        .refresh-btn {
-          background: rgba(0, 119, 255, 0.1);
-          border: 1px solid rgba(0, 119, 255, 0.3);
-          border-radius: 40px;
-          padding: 0.4rem 1rem;
-          font-size: 0.75rem;
-          font-weight: 600;
-          color: var(--c);
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        .refresh-btn:hover:not(:disabled) {
-          background: rgba(0, 119, 255, 0.2);
-          transform: translateY(-1px);
-        }
-        .refresh-btn:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
+          inset: 0;
+          background-image:
+            linear-gradient(rgba(79,70,229,0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(79,70,229,0.03) 1px, transparent 1px);
+          background-size: 52px 52px;
+          mask-image: radial-gradient(ellipse 70% 70% at 50% 30%, black 20%, transparent 80%);
         }
 
-        /* MAIN CONTENT */
-        .main-content {
+        /* Main layout - 2 kolom: sidebar kiri + konten kanan */
+        .main {
           position: relative;
           z-index: 1;
           padding: 2rem 2rem 4rem;
-        }
-        .container {
-          max-width: 1340px;
+          max-width: 1400px;
           margin: 0 auto;
         }
-
-        /* PROFILE CARD */
-        .profile-card {
-          background: rgba(255, 255, 255, 0.9);
-          backdrop-filter: blur(12px);
-          border: 1px solid rgba(0, 119, 255, 0.15);
-          border-radius: 32px;
-          padding: 1.8rem;
-          margin-bottom: 2.5rem;
+        .dashboard-layout {
           display: flex;
+          gap: 2rem;
+          align-items: flex-start;
+        }
+
+
+        /* Konten utama kanan */
+        .content-main {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 2rem;
+        }
+          
+        /* Hero */
+        .hero {
+          display: flex;
+          justify-content: space-between;
           align-items: center;
-          gap: 1.8rem;
+          gap: 2rem;
+          background: var(--white);
+          border-radius: var(--radius-2xl);
+          padding: 2rem 2.5rem;
+          box-shadow: var(--shadow-md);
+          border: 1px solid var(--border);
+        }
+        .hero-left {
+          flex: 1;
+        }
+        .hero-chip {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          font-size: 0.7rem;
+          font-weight: 600;
+          color: var(--indigo);
+          background: var(--indigo-50);
+          border: 1px solid var(--indigo-100);
+          border-radius: 100px;
+          padding: 0.3rem 0.9rem;
+          margin-bottom: 1rem;
+        }
+        .hero-chip-dot {
+          width: 6px; height: 6px;
+          border-radius: 50%;
+          background: var(--indigo);
+          animation: dotBlink 2s ease infinite;
+        }
+        .hero-h1 {
+          font-family: var(--ff-display);
+          font-size: clamp(1.5rem, 2.8vw, 2.4rem);
+          font-weight: 700;
+          color: var(--ink);
+          line-height: 1.2;
+          margin-bottom: 0.75rem;
+        }
+        .hero-accent { color: var(--indigo); }
+        .hero-wave {
+          display: inline-block;
+          animation: waveHand 2.4s ease-in-out 0.8s 2;
+          transform-origin: 70% 80%;
+        }
+        .hero-lead {
+          font-size: 0.9rem;
+          color: var(--ink-3);
+          max-width: 420px;
+          margin-bottom: 1rem;
+        }
+        .hero-status {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          background: var(--surface-2);
+          border: 1px solid var(--border);
+          border-radius: 100px;
+          padding: 0.35rem 1rem;
+          font-size: 0.75rem;
+        }
+        .hs-dot { width: 7px; height: 7px; border-radius: 50%; }
+        .hs-label { color: var(--ink-3); }
+        .hs-val { font-weight: 700; }
+        .hs-note { color: var(--ink-4); margin-left: 0.3rem; }
+
+        /* ID Card */
+        .id-card {
+          width: 240px;
+          background: linear-gradient(145deg, #fff, var(--indigo-50));
+          border: 1px solid var(--indigo-100);
+          border-radius: var(--radius-xl);
+          padding: 1.2rem;
+          box-shadow: var(--shadow-md);
           position: relative;
           overflow: hidden;
-          transition: all 0.4s ease;
         }
-        .profile-card:hover {
-          transform: translateY(-3px);
-          border-color: rgba(0, 119, 255, 0.3);
-          box-shadow: 0 20px 40px rgba(0, 119, 255, 0.12);
-        }
-        .profile-glow {
+        .idc-shimmer {
           position: absolute;
-          top: -50%;
-          right: -50%;
-          width: 200%;
-          height: 200%;
-          background: radial-gradient(circle, rgba(0, 119, 255, 0.08), transparent 70%);
+          top: 0; left: 0;
+          width: 60%; height: 100%;
+          background: linear-gradient(105deg, transparent 30%, rgba(255,255,255,0.5) 50%, transparent 70%);
+          animation: shimmer 4s ease-in-out 1.5s infinite;
           pointer-events: none;
         }
-        .profile-avatar {
-          width: 80px;
-          height: 80px;
-          background: linear-gradient(135deg, var(--c), var(--cy));
+        .idc-top {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 0.8rem;
+        }
+        .idc-logo {
+          width: 28px; height: 28px;
+          background: var(--indigo);
+          border-radius: 8px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+        }
+        .idc-event {
+          font-size: 0.55rem;
+          font-weight: 700;
+          color: var(--indigo);
+          letter-spacing: 0.06em;
+        }
+        .idc-av-wrap {
+          position: relative;
+          width: 52px; height: 52px;
+          margin: 0 auto 0.8rem;
+        }
+        .idc-av {
+          width: 52px; height: 52px;
+          background: var(--indigo);
           border-radius: 50%;
           display: flex;
           align-items: center;
           justify-content: center;
-          font-size: 2rem;
           font-weight: 800;
-          color: white;
-          box-shadow: 0 8px 20px rgba(0, 119, 255, 0.3);
-        }
-        .profile-info {
-          flex: 1;
-        }
-        .profile-name {
-          font-family: 'Clash Display', sans-serif;
-          font-size: 1.6rem;
-          font-weight: 700;
-          color: var(--t1);
-          margin-bottom: 0.25rem;
-        }
-        .profile-email {
-          font-size: 0.9rem;
-          color: var(--t3);
-          margin-bottom: 0.5rem;
-        }
-        .role-badge {
-          display: inline-block;
-          background: rgba(0, 119, 255, 0.12);
-          color: var(--c);
-          font-weight: 700;
-          font-size: 0.7rem;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-          padding: 0.3rem 1rem;
-          border-radius: 100px;
-          border: 1px solid rgba(0, 119, 255, 0.2);
-        }
-
-        /* TEAM SECTION */
-        .section-title {
-          font-family: 'Clash Display', sans-serif;
           font-size: 1.2rem;
+          color: white;
+          box-shadow: 0 4px 12px rgba(79,70,229,0.3);
+          position: relative;
+          z-index: 1;
+        }
+        .idc-av-ring {
+          position: absolute;
+          inset: -4px;
+          border: 2px dashed rgba(79,70,229,0.3);
+          border-radius: 50%;
+          animation: spinRing 16s linear infinite;
+        }
+        .idc-info {
+          text-align: center;
+          margin-bottom: 0.8rem;
+        }
+        .idc-name {
           font-weight: 700;
-          color: var(--t1);
-          margin-bottom: 1rem;
+          font-size: 0.8rem;
+          margin-bottom: 0.2rem;
         }
-        .team-card {
-          background: rgba(255, 255, 255, 0.9);
-          backdrop-filter: blur(12px);
-          border: 1px solid rgba(0, 119, 255, 0.15);
-          border-radius: 28px;
-          padding: 1.5rem;
-          transition: all 0.3s ease;
+        .idc-email {
+          font-size: 0.6rem;
+          color: var(--ink-3);
         }
-        .team-card:hover {
-          transform: translateY(-3px);
-          border-color: rgba(0, 119, 255, 0.25);
-          box-shadow: 0 12px 28px rgba(0, 119, 255, 0.1);
-        }
-        .team-row {
+        .idc-foot {
           display: flex;
-          align-items: baseline;
-          gap: 1rem;
-          padding: 0.7rem 0;
-          border-bottom: 1px solid rgba(0, 119, 255, 0.08);
+          justify-content: space-between;
+          align-items: center;
+          border-top: 1px solid var(--indigo-100);
+          padding-top: 0.6rem;
         }
-        .team-row:last-child {
-          border-bottom: none;
-        }
-        .team-label {
-          width: 130px;
+        .idc-badge {
+          font-size: 0.55rem;
           font-weight: 700;
-          font-size: 0.85rem;
-          color: var(--t2);
-        }
-        .team-value {
-          flex: 1;
-          font-size: 0.9rem;
-          color: var(--t1);
-          font-weight: 500;
-        }
-        .status-badge {
-          padding: 0.25rem 0.8rem;
+          background: var(--indigo-100);
+          color: var(--indigo);
+          padding: 0.15rem 0.5rem;
           border-radius: 100px;
-          font-size: 0.75rem;
+        }
+        .idc-id {
+          font-size: 0.55rem;
+          color: var(--ink-4);
+        }
+
+        /* Panel */
+        .panel {
+          background: var(--white);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-xl);
+          padding: 1.5rem;
+          box-shadow: var(--shadow-sm);
+        }
+        .panel-hd {
+          margin-bottom: 1.2rem;
+        }
+        .panel-title {
+          font-family: var(--ff-display);
+          font-size: 1.1rem;
           font-weight: 700;
-          display: inline-block;
+          margin-bottom: 0.2rem;
         }
-        .status-badge.pending {
-          background: #fef3c7;
-          color: #b45309;
+        .panel-sub {
+          font-size: 0.75rem;
+          color: var(--ink-3);
         }
-        .status-badge.approved {
-          background: #d1fae5;
-          color: #065f46;
+
+        /* Guide */
+        .guide-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 1rem;
         }
-        .status-badge.rejected {
-          background: #fee2e2;
-          color: #991b1b;
+        .guide-card {
+          background: var(--surface-2);
+          border: 1px solid var(--border);
+          border-radius: var(--radius-lg);
+          padding: 1rem;
         }
-        .team-note {
-          flex: 1;
+        .guide-card:hover {
+          border-color: var(--indigo-200);
+          box-shadow: var(--shadow-md);
+        }
+        .guide-num {
+          font-size: 0.6rem;
+          font-weight: 800;
+          color: var(--indigo);
+          display: block;
+          margin-bottom: 0.4rem;
+        }
+        .guide-title {
+          font-family: var(--ff-display);
           font-size: 0.85rem;
-          color: #4b5563;
-          background: #f8fafc;
-          padding: 0.4rem 0.8rem;
-          border-radius: 12px;
+          font-weight: 700;
+          margin-bottom: 0.3rem;
+        }
+        .guide-body {
+          font-size: 0.75rem;
+          color: var(--ink-3);
+          line-height: 1.5;
         }
 
-        /* ANIMATION SCROLL */
-        .a {
-          opacity: 0;
-          transform: translateY(20px);
-          transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
-            transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-          transition-delay: var(--d, 0s);
-        }
-        .ai {
-          opacity: 1;
-          transform: none;
-        }
-
-        /* RESPONSIVE */
-        @media (max-width: 768px) {
-          .main-content {
-            padding: 1.5rem;
-          }
-          .nav-in {
-            padding: 0.75rem 1rem;
-          }
-          .brand-name {
-            display: none;
-          }
-          .ui {
-            display: none;
-          }
-          .profile-card {
+        /* Responsive */
+        @media (max-width: 1000px) {
+          .dashboard-layout {
             flex-direction: column;
-            text-align: center;
+          }
+          .sidebar {
+            flex: auto;
+            width: 100%;
+            position: static;
+            flex-direction: row;
+            flex-wrap: wrap;
             gap: 1rem;
           }
-          .team-row {
-            flex-direction: column;
-            gap: 0.3rem;
+          .ac-container {
+            flex: 1;
+            min-width: 240px;
           }
-          .team-label {
-            width: auto;
+          .hero {
+            flex-direction: column;
+            text-align: center;
+            padding: 1.5rem;
+          }
+          .hero-left {
+            text-align: center;
+          }
+          .hero-lead {
+            margin-left: auto;
+            margin-right: auto;
+          }
+          .guide-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+        @media (max-width: 700px) {
+          .main {
+            padding: 1rem;
+          }
+          .sidebar {
+            flex-direction: column;
+          }
+          .guide-grid {
+            grid-template-columns: 1fr;
+          }
+          .id-card {
+            width: 100%;
+            max-width: 280px;
           }
         }
       `}</style>

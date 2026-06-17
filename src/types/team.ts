@@ -17,7 +17,7 @@ export interface Team {
   institution: string | null;
   city: string | null;
   ketua_id: number;
-  selection_status: 'pending' | 'approved' | 'rejected';
+  selection_status: 'pending' | 'lolos_seleksi' | 'follow_the_bootcamp' | 'first_half_hackathon' | 'semi_final' | 'final' | 'rejected';
   selection_note?: string | null;
   selection_processed_at?: string | null;
   created_at: string;
@@ -46,4 +46,36 @@ export interface TeamDocument {
   file_url?: string;
   external_link?: string;
   is_verified: boolean;
+}
+
+export interface TeamStatusResponse {
+  team: {
+    id: number;
+    team_name: string;
+    selection_status: string;
+    selection_note: string | null;
+  };
+  members: {
+    id: number;
+    name: string;
+    position: string;
+    shirt_size: string | null;
+  }[];
+}
+
+export interface ConfirmLolosPayload {
+  members: { member_id: number; shirt_size: string }[];
+}
+
+export interface ConfirmBootcampPayload {
+  project_type: 'AI Application' | 'Game Dev' | 'Video Animation';
+  description?: string;
+}
+
+// types/submission.ts (tambah)
+export interface SubmissionFileUpload {
+  submission_category: 'logbook_1' | 'logbook_2' | 'final_submission';
+  file_type: 'file' | 'link';
+  file?: File;
+  external_url?: string;
 }
