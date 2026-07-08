@@ -257,13 +257,15 @@ export default function LandingPage() {
   const { announcements, faqs, loading } = usePublicData();
   const [openFaq, setOpenFaq] = useState<number | null>(null);
   const [scrolled, setScrolled] = useState(false);
-  const [scrollPct, setScrollPct] = useState(0);
   const [expandedAnn, setExpandedAnn] = useState<number | null>(null);
 
+  // Hanya untuk mendeteksi scroll (tanpa progress)
   useEffect(() => {
-    const fn = () => { setScrolled(window.scrollY > 20); const h = document.documentElement.scrollHeight - window.innerHeight; if (h > 0) setScrollPct(Math.min((window.scrollY / h) * 100, 100)); };
-    window.addEventListener('scroll', fn, { passive: true }); return () => window.removeEventListener('scroll', fn);
+    const fn = () => { setScrolled(window.scrollY > 20); };
+    window.addEventListener('scroll', fn, { passive: true });
+    return () => window.removeEventListener('scroll', fn);
   }, []);
+
   useEffect(() => {
     const obs = new IntersectionObserver((entries) => entries.forEach(e => e.isIntersecting && e.target.classList.add('ai')), { threshold: 0.1 });
     document.querySelectorAll('.a').forEach(el => obs.observe(el));
@@ -288,9 +290,8 @@ export default function LandingPage() {
     <div className="root">
       <CursorSpotlight />
 
-      {/* NAVBAR */}
+      {/* NAVBAR — progress bar sudah dihapus */}
       <nav className={`nav ${scrolled ? 'nav-s' : ''}`}>
-        <div className="nav-prog"><div style={{ width: `${scrollPct}%` }} className="nav-prog-fill" /></div>
         <div className="nav-in">
           <div className="nav-brand">
             <div className="brand-logo"><Image src={Hackathon} alt="hackathon" width={150} height={32} style={{ objectFit: 'contain' }} /></div>
@@ -311,7 +312,7 @@ export default function LandingPage() {
               <div className="nav-user">
                 <div className="uav">{(user.name || 'P').charAt(0).toUpperCase()}</div>
                 <div className="ui"><span className="un">{user.name || 'Peserta'}</span><span className="ur">{user.role === 'admin' ? 'Admin' : user.role === 'juri' ? 'Juri' : 'Peserta'}</span></div>
-                <Link href={user?.role === 'admin' ? '/admin/dashboard' : user?.role === 'juri' ? '/juri/dashboard' : '/peserta/dashboard'} className="nd">
+                <Link href={user?.role === 'admin' ? '/admin/' : user?.role === 'juri' ? '/juri/dashboard' : '/peserta/dashboard'} className="nd">
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
                 </Link>
               </div>
@@ -330,7 +331,8 @@ export default function LandingPage() {
             <h1 className="h-title">
               <span className="ht1">Hackathon</span>
               <span className="ht2">Inovasi Digital</span>
-              <span className="ht3"><span className="h-acc">Empat Pilar</span> MPR RI</span>
+              <span className="ht3"><span className="h-acc">Empat Pilar</span> </span>
+              <span className="ht3">MPR RI</span>
             </h1>
             <p className="h-sub">Platform kolaborasi pemuda Indonesia membangun solusi teknologi yang memperkuat nilai-nilai kebangsaan. Jadilah bagian dari perubahan! 🚀</p>
             {!user ? (
@@ -343,7 +345,6 @@ export default function LandingPage() {
                 <Link href={user?.role === 'admin' ? '/admin/dashboard' : user?.role === 'juri' ? '/juri/dashboard' : '/peserta/dashboard'} className="cta-p">Dashboard <span className="cta-arr">→</span></Link>
               </div>
             )}
-            <div className="scroll-h"><div className="s-track"><div className="s-ball" /></div><span>Scroll ke bawah</span></div>
           </div>
           
           <div className="hr-side">
@@ -372,7 +373,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* STATS, TIMELINE, ANNOUNCEMENTS, FAQ, FOOTER (sama seperti sebelumnya) */}
+      {/* STATS */}
       <section className="stats-sec">
         <div className="stats-in">
           {stats.map((s, i) => (
@@ -390,6 +391,7 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* TIMELINE */}
       <section className="tl-sec">
         <div className="tl-b tl-bl" /><div className="tl-b tl-br" />
         <div className="sec-in">
@@ -422,6 +424,7 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ANNOUNCEMENTS */}
       <section className="ann-sec">
         <div className="ann-blob" />
         <div className="sec-in">
@@ -467,6 +470,7 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* FAQ */}
       <section className="faq-sec">
         <div className="faq-b faq-bl" /><div className="faq-b faq-br" />
         <div className="sec-in">
@@ -551,7 +555,7 @@ export default function LandingPage() {
       <style jsx>{`
         .root{min-height:100vh;}
 
-        /* NAVBAR */
+        /* NAVBAR — progress bar dihapus */
         .nav{
           position:sticky;
           top:0;
@@ -566,19 +570,6 @@ export default function LandingPage() {
           backdrop-filter:blur(16px) saturate(180%);
           border-bottom:2px solid rgba(0,119,255,0.3);
           box-shadow:0 8px 32px rgba(0,0,0,0.08), 0 0 0 1px rgba(0,119,255,0.05) inset;
-        }
-        .nav-prog{
-          position:absolute;
-          bottom:0;
-          left:0;
-          width:100%;
-          height:2px;
-          background:rgba(0,119,255,.06);
-        }
-        .nav-prog-fill{
-          height:100%;
-          background:linear-gradient(90deg,var(--c),var(--tl));
-          transition:width .2s;
         }
         .nav-in{
           max-width:1340px;

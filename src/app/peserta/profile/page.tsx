@@ -186,7 +186,7 @@ export default function ProfilePage() {
 
   const handleLogout = async () => {
     await logout();
-    router.push('/');
+    router.push('/auth/login');
   };
 
   if (!profile) {
@@ -417,11 +417,6 @@ export default function ProfilePage() {
           margin: 0 auto;
         }
 
-        aside {
-          flex: 0 0 240px;
-          position: sticky;
-          top: 2rem;
-        }
 
         .content {
           flex: 1;

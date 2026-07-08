@@ -13,4 +13,13 @@ export const adminService = {
     api.get(`/admin/teams/${teamId}/submissions`),
   reviewSubmission: (submissionId: number, action: 'approved' | 'rejected', note?: string) =>
     api.post(`/admin/submissions/${submissionId}/review`, { action, note }),
+  getTeamScores: async (stageId?: number) => {
+    const params = stageId ?  {stage_id: stageId} : {};
+    const res = await api.get('/admin/teams/scores', { params });
+    return res.data;
+  },
+  getDashboardSummary: async () => {
+    const res = await api.get('/admin/dashboard/summary');
+      return res.data;
+  }
 };

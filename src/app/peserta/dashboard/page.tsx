@@ -162,7 +162,7 @@ export default function PesertaDashboardPage() {
   }, [teamLoading]);
 
   const handleWizardSuccess = async () => { setShowWizard(false); await fetchTeam(); };
-  const handleLogout = async () => { await logout(); router.push('/'); };
+  const handleLogout = async () => { await logout(); router.push('/auth/login'); };
 
   const initials = (user?.name || 'U').charAt(0).toUpperCase();
   const firstName = user?.name?.split(' ')[0] || 'Peserta';

@@ -167,7 +167,7 @@ export default function SubmissionsPage() {
 
   const handleLogout = async () => {
     await logout();
-    router.push('/');
+    router.push('/auth/login');
   };
 
   const handleUpload = async (submissionId: number, category: string, fileType: string, file?: File, url?: string) => {

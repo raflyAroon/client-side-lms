@@ -79,3 +79,40 @@ export interface SubmissionFileUpload {
   file?: File;
   external_url?: string;
 }
+
+export interface TeamDocumentsModalProps {
+  teamId: number;
+  isOpen: boolean;
+  onClose: () => void;
+  onTeamUpdated: () => void;
+}
+
+export interface ScoreDetailModalProps {
+  submissionId: number;
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export interface ScoreDetail {
+  id: number;
+  juri_id: number;
+  total_score: number;
+  feedback: string | null;
+  created_at: string;
+  juri: {
+    id: number;
+    name: string;
+    email: string;
+  };
+  score_details: Array<{
+    id: number;
+    rubric_criteria_id: number;
+    score_value: number;
+    rubric_criteria: {
+      id: number;
+      criterion_name: string;
+      max_score: number;
+      weight: number;
+    };
+  }>;
+}

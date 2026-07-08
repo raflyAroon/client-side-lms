@@ -11,7 +11,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'Lomba Coding MPR RI 2026',
+  title: 'Hackathon MPR RI 2026',
   description: 'Platform lomba coding nasional',
 };
 

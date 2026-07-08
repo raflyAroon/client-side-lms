@@ -15,7 +15,7 @@ export default function DashboardRouter() {
       if (!user) {
         router.push('/auth/login');
       } else if (user.role === 'admin') {
-        router.push('/admin/dashboard');
+        router.push('/admin/');
       } else if (user.role === 'juri') {
         router.push('/juri/dashboard');
       } else {

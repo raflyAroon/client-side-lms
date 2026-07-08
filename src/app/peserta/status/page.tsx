@@ -184,7 +184,7 @@ export default function StatusPage() {
 
   const handleLogout = async () => {
     await logout();
-    router.push('/');
+    router.push('/auth/login');
   };
 
   const handleConfirmLolos = async () => {
